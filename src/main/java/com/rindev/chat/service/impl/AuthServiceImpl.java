@@ -37,8 +37,8 @@ public class AuthServiceImpl implements AuthService {
     private final UserMapper userMapper;
 
     public AuthServiceImpl(UserRepository userRepository, UserSettingRepository userSettingRepository,
-                           PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager,
-                           JwtService jwtService, RefreshTokenService refreshTokenService, UserMapper userMapper) {
+            PasswordEncoder passwordEncoder, AuthenticationManager authenticationManager,
+            JwtService jwtService, RefreshTokenService refreshTokenService, UserMapper userMapper) {
         this.userRepository = userRepository;
         this.userSettingRepository = userSettingRepository;
         this.passwordEncoder = passwordEncoder;
@@ -62,7 +62,8 @@ public class AuthServiceImpl implements AuthService {
         user.setUsername(request.username());
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
-        // Flush here so uniqueness races fail before creating settings or issuing tokens.
+        // Flush here so uniqueness races fail before creating settings or issuing
+        // tokens.
         user = userRepository.saveAndFlush(user);
 
         var settings = new UserSetting();
@@ -80,12 +81,14 @@ public class AuthServiceImpl implements AuthService {
         Long userId;
         try {
             var authentication = authenticationManager.authenticate(credentials);
-            if (!authentication.isAuthenticated() || !(authentication.getPrincipal() instanceof ChatUserDetails principal)) {
+            if (!authentication.isAuthenticated()
+                    || !(authentication.getPrincipal() instanceof ChatUserDetails principal)) {
                 throw new UnauthorizedException("Invalid username or password");
             }
             userId = principal.getId();
         } catch (AuthenticationException exception) {
-            // Never retain authentication-provider messages or causes containing credentials.
+            // Never retain authentication-provider messages or causes containing
+            // credentials.
             throw new UnauthorizedException("Invalid username or password");
         } finally {
             credentials.eraseCredentials();
