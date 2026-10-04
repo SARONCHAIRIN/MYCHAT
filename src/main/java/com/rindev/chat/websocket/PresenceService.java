@@ -4,6 +4,8 @@ import com.rindev.chat.entity.User;
 import com.rindev.chat.enums.UserStatus;
 import com.rindev.chat.repository.ConversationMemberRepository;
 import com.rindev.chat.repository.UserRepository;
+import com.rindev.chat.repository.UserSettingRepository;
+
 import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -11,6 +13,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.rindev.chat.entity.UserSetting;
+import com.rindev.chat.enums.PrivacyLevel;
 
 @Service
 public class PresenceService {
@@ -18,17 +22,20 @@ public class PresenceService {
     private final UserRepository userRepository;
     private final ConversationMemberRepository memberRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final UserSettingRepository settingRepository;
 
     private final ConcurrentHashMap<Long, Set<String>> sessions = new ConcurrentHashMap<>();
 
     public PresenceService(
             UserRepository userRepository,
             ConversationMemberRepository memberRepository,
-            SimpMessagingTemplate messagingTemplate) {
+            SimpMessagingTemplate messagingTemplate,
+            UserSettingRepository settingRepository) {
 
         this.userRepository = userRepository;
         this.memberRepository = memberRepository;
         this.messagingTemplate = messagingTemplate;
+        this.settingRepository = settingRepository;
     }
 
     @Transactional
@@ -96,6 +103,24 @@ public class PresenceService {
             WebSocketEventType type,
             PresenceEventPayload payload) {
 
+        PrivacyLevel privacy = settingRepository.findByUserId(userId)
+                .map(UserSetting::getLastSeenPrivacy)
+                .orElse(PrivacyLevel.EVERYONE);
+
+        // User does not allow anyone to see presence/last seen
+        if (privacy == PrivacyLevel.NOBODY) {
+            return;
+        }
+
+        // Current project does not yet have a contact/friend relationship
+        // Fail closed to avoid leaking presence information.
+        if (privacy == PrivacyLevel.CONTACTS) {
+            return;
+        }
+
+        // EVERYONE:
+        // Broadcast only through conversations where the user
+        // is currently an active member.
         memberRepository
                 .findByUserIdAndLeftAtIsNull(userId)
                 .forEach(member -> {
