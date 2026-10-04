@@ -16,148 +16,196 @@ import com.rindev.chat.service.ReceiptService;
 import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.rindev.chat.websocket.ConversationEventPublisher;
+import com.rindev.chat.websocket.WebSocketEventType;
 
 @Service
 public class ReceiptServiceImpl
-        implements ReceiptService {
+                implements ReceiptService {
 
-    private final MessageRepository messageRepository;
-    private final MessageReceiptRepository receiptRepository;
-    private final ConversationMemberRepository memberRepository;
-    private final UserRepository userRepository;
-    private final UserSettingRepository settingRepository;
+        private final MessageRepository messageRepository;
+        private final MessageReceiptRepository receiptRepository;
+        private final ConversationMemberRepository memberRepository;
+        private final UserRepository userRepository;
+        private final UserSettingRepository settingRepository;
+        private final ConversationEventPublisher eventPublisher;
 
-    public ReceiptServiceImpl(
-            MessageRepository messageRepository,
-            MessageReceiptRepository receiptRepository,
-            ConversationMemberRepository memberRepository,
-            UserRepository userRepository,
-            UserSettingRepository settingRepository) {
+        public ReceiptServiceImpl(
+                        MessageRepository messageRepository,
+                        MessageReceiptRepository receiptRepository,
+                        ConversationMemberRepository memberRepository,
+                        UserRepository userRepository,
+                        UserSettingRepository settingRepository,
+                        ConversationEventPublisher eventPublisher) {
 
-        this.messageRepository = messageRepository;
-        this.receiptRepository = receiptRepository;
-        this.memberRepository = memberRepository;
-        this.userRepository = userRepository;
-        this.settingRepository = settingRepository;
-    }
-
-    @Override
-    @Transactional
-    public ReceiptResponse markDelivered(
-            Long userId,
-            Long messageId) {
-
-        Message message = requireAccessibleMessage(
-                userId,
-                messageId);
-
-        MessageReceipt receipt = getOrCreate(
-                message,
-                userId);
-
-        if (receipt.getDeliveredAt() == null) {
-            receipt.setDeliveredAt(
-                    LocalDateTime.now());
+                this.messageRepository = messageRepository;
+                this.receiptRepository = receiptRepository;
+                this.memberRepository = memberRepository;
+                this.userRepository = userRepository;
+                this.settingRepository = settingRepository;
+                this.eventPublisher = eventPublisher;
         }
 
-        return map(
-                receiptRepository.save(receipt));
-    }
+        @Override
+        @Transactional
+        public ReceiptResponse markDelivered(
+                        Long userId,
+                        Long messageId) {
 
-    @Override
-    @Transactional
-    public ReceiptResponse markRead(
-            Long userId,
-            Long messageId) {
+                Message message = requireAccessibleMessage(
+                                userId,
+                                messageId);
 
-        Message message = requireAccessibleMessage(
-                userId,
-                messageId);
+                Long conversationId = message.getConversation().getId();
 
-        boolean readReceiptsEnabled = settingRepository
-                .findByUserId(userId)
-                .map(UserSetting::getReadReceipts)
-                .orElse(true);
+                MessageReceipt receipt = getOrCreate(
+                                message,
+                                userId);
 
-        if (!readReceiptsEnabled) {
-            throw new ForbiddenException(
-                    "Read receipts are disabled");
+                boolean newlyDelivered = receipt.getDeliveredAt() == null;
+
+                if (newlyDelivered) {
+                        receipt.setDeliveredAt(
+                                        LocalDateTime.now());
+                }
+
+                MessageReceipt saved = receiptRepository.save(receipt);
+
+                ReceiptResponse response = map(saved);
+
+                // Broadcast only when state changed
+                if (newlyDelivered) {
+                        eventPublisher.publish(
+                                        WebSocketEventType.MESSAGE_DELIVERED,
+                                        conversationId,
+                                        response);
+                }
+
+                return response;
         }
 
-        MessageReceipt receipt = getOrCreate(
-                message,
-                userId);
+        @Override
+        @Transactional
+        public ReceiptResponse markRead(
+                        Long userId,
+                        Long messageId) {
 
-        LocalDateTime now = LocalDateTime.now();
+                Message message = requireAccessibleMessage(
+                                userId,
+                                messageId);
 
-        if (receipt.getDeliveredAt() == null) {
-            receipt.setDeliveredAt(now);
+                Long conversationId = message.getConversation().getId();
+
+                boolean readReceiptsEnabled = settingRepository
+                                .findByUserId(userId)
+                                .map(UserSetting::getReadReceipts)
+                                .orElse(true);
+
+                if (!readReceiptsEnabled) {
+                        throw new ForbiddenException(
+                                        "Read receipts are disabled");
+                }
+
+                MessageReceipt receipt = getOrCreate(
+                                message,
+                                userId);
+
+                boolean newlyDelivered = receipt.getDeliveredAt() == null;
+
+                boolean newlyRead = receipt.getReadAt() == null;
+
+                LocalDateTime now = LocalDateTime.now();
+
+                if (newlyDelivered) {
+                        receipt.setDeliveredAt(now);
+                }
+
+                if (newlyRead) {
+                        receipt.setReadAt(now);
+                }
+
+                MessageReceipt saved = receiptRepository.save(receipt);
+
+                ReceiptResponse response = map(saved);
+
+                /*
+                 * Reading a message implicitly marks it delivered.
+                 * Publish both transitions when both states changed.
+                 */
+
+                if (newlyDelivered) {
+                        eventPublisher.publish(
+                                        WebSocketEventType.MESSAGE_DELIVERED,
+                                        conversationId,
+                                        response);
+                }
+
+                if (newlyRead) {
+                        eventPublisher.publish(
+                                        WebSocketEventType.MESSAGE_READ,
+                                        conversationId,
+                                        response);
+                }
+
+                return response;
         }
 
-        if (receipt.getReadAt() == null) {
-            receipt.setReadAt(now);
+        private MessageReceipt getOrCreate(
+                        Message message,
+                        Long userId) {
+
+                return receiptRepository
+                                .findByMessageIdAndUserId(
+                                                message.getId(),
+                                                userId)
+                                .orElseGet(() -> {
+
+                                        User user = userRepository
+                                                        .findById(userId)
+                                                        .orElseThrow(() -> new ResourceNotFoundException(
+                                                                        "User not found"));
+
+                                        MessageReceipt receipt = new MessageReceipt();
+
+                                        receipt.setMessage(message);
+                                        receipt.setUser(user);
+
+                                        return receipt;
+                                });
         }
 
-        return map(
-                receiptRepository.save(receipt));
-    }
+        private Message requireAccessibleMessage(
+                        Long userId,
+                        Long messageId) {
 
-    private MessageReceipt getOrCreate(
-            Message message,
-            Long userId) {
+                Message message = messageRepository
+                                .findById(messageId)
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Message not found"));
 
-        return receiptRepository
-                .findByMessageIdAndUserId(
-                        message.getId(),
-                        userId)
-                .orElseGet(() -> {
+                Long conversationId = message.getConversation().getId();
 
-                    User user = userRepository
-                            .findById(userId)
-                            .orElseThrow(() -> new ResourceNotFoundException(
-                                    "User not found"));
+                boolean member = memberRepository
+                                .existsByConversationIdAndUserIdAndLeftAtIsNull(
+                                                conversationId,
+                                                userId);
 
-                    MessageReceipt receipt = new MessageReceipt();
+                if (!member) {
+                        throw new ForbiddenException(
+                                        "You cannot access this message");
+                }
 
-                    receipt.setMessage(message);
-                    receipt.setUser(user);
-
-                    return receipt;
-                });
-    }
-
-    private Message requireAccessibleMessage(
-            Long userId,
-            Long messageId) {
-
-        Message message = messageRepository
-                .findById(messageId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Message not found"));
-
-        Long conversationId = message.getConversation().getId();
-
-        boolean member = memberRepository
-                .existsByConversationIdAndUserIdAndLeftAtIsNull(
-                        conversationId,
-                        userId);
-
-        if (!member) {
-            throw new ForbiddenException(
-                    "You cannot access this message");
+                return message;
         }
 
-        return message;
-    }
+        private ReceiptResponse map(
+                        MessageReceipt receipt) {
 
-    private ReceiptResponse map(
-            MessageReceipt receipt) {
-
-        return new ReceiptResponse(
-                receipt.getId(),
-                receipt.getMessage().getId(),
-                receipt.getUser().getId(),
-                receipt.getDeliveredAt(),
-                receipt.getReadAt());
-    }
+                return new ReceiptResponse(
+                                receipt.getId(),
+                                receipt.getMessage().getId(),
+                                receipt.getUser().getId(),
+                                receipt.getDeliveredAt(),
+                                receipt.getReadAt());
+        }
 }

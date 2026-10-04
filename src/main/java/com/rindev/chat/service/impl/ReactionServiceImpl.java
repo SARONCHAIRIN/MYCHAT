@@ -13,6 +13,9 @@ import com.rindev.chat.repository.MessageReactionRepository;
 import com.rindev.chat.repository.MessageRepository;
 import com.rindev.chat.repository.UserRepository;
 import com.rindev.chat.service.ReactionService;
+import com.rindev.chat.websocket.ConversationEventPublisher;
+import com.rindev.chat.websocket.WebSocketEventType;
+
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,154 +23,186 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional(readOnly = true)
 public class ReactionServiceImpl
-        implements ReactionService {
+                implements ReactionService {
 
-    private final MessageRepository messageRepository;
-    private final MessageReactionRepository reactionRepository;
-    private final ConversationMemberRepository memberRepository;
-    private final UserRepository userRepository;
+        private final MessageRepository messageRepository;
+        private final MessageReactionRepository reactionRepository;
+        private final ConversationMemberRepository memberRepository;
+        private final ConversationEventPublisher eventPublisher;
+        private final UserRepository userRepository;
 
-    public ReactionServiceImpl(
-            MessageRepository messageRepository,
-            MessageReactionRepository reactionRepository,
-            ConversationMemberRepository memberRepository,
-            UserRepository userRepository) {
+        public ReactionServiceImpl(
+                        MessageRepository messageRepository,
+                        MessageReactionRepository reactionRepository,
+                        ConversationMemberRepository memberRepository,
+                        ConversationEventPublisher eventPublisher,
+                        UserRepository userRepository) {
 
-        this.messageRepository = messageRepository;
-        this.reactionRepository = reactionRepository;
-        this.memberRepository = memberRepository;
-        this.userRepository = userRepository;
-    }
+                this.messageRepository = messageRepository;
+                this.reactionRepository = reactionRepository;
+                this.memberRepository = memberRepository;
+                this.userRepository = userRepository;
+                this.eventPublisher = eventPublisher;
 
-    @Override
-    @Transactional
-    public ReactionResponse addReaction(
-            Long userId,
-            Long messageId,
-            String emoji) {
-
-        Message message = requireAccessibleMessage(
-                userId,
-                messageId);
-
-        String normalized = normalizeEmoji(emoji);
-
-        boolean exists = reactionRepository
-                .existsByMessageIdAndUserIdAndEmoji(
-                        messageId,
-                        userId,
-                        normalized);
-
-        if (exists) {
-            throw new ConflictException(
-                    "Reaction already exists");
         }
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "User not found"));
+        @Override
+        @Transactional
+        public ReactionResponse addReaction(
+                        Long userId,
+                        Long messageId,
+                        String emoji) {
 
-        MessageReaction reaction = new MessageReaction();
+                Message message = requireAccessibleMessage(
+                                userId,
+                                messageId);
 
-        reaction.setMessage(message);
-        reaction.setUser(user);
-        reaction.setEmoji(normalized);
+                Long conversationId = message.getConversation().getId();
 
-        return map(
-                reactionRepository.save(reaction));
-    }
+                String normalized = normalizeEmoji(emoji);
 
-    @Override
-    public List<ReactionResponse> getReactions(
-            Long userId,
-            Long messageId) {
+                boolean exists = reactionRepository
+                                .existsByMessageIdAndUserIdAndEmoji(
+                                                messageId,
+                                                userId,
+                                                normalized);
 
-        requireAccessibleMessage(
-                userId,
-                messageId);
+                if (exists) {
+                        throw new ConflictException(
+                                        "Reaction already exists");
+                }
 
-        return reactionRepository
-                .findByMessageIdOrderByCreatedAtAsc(
-                        messageId)
-                .stream()
-                .map(this::map)
-                .toList();
-    }
+                User user = userRepository.findById(userId)
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "User not found"));
 
-    @Override
-    @Transactional
-    public void removeReaction(
-            Long userId,
-            Long messageId,
-            String emoji) {
+                MessageReaction reaction = new MessageReaction();
 
-        requireAccessibleMessage(
-                userId,
-                messageId);
+                reaction.setMessage(message);
+                reaction.setUser(user);
+                reaction.setEmoji(normalized);
 
-        String normalized = normalizeEmoji(emoji);
+                // 1. Save
+                MessageReaction saved = reactionRepository.save(reaction);
 
-        MessageReaction reaction = reactionRepository
-                .findByMessageIdAndUserIdAndEmoji(
-                        messageId,
-                        userId,
-                        normalized)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Reaction not found"));
+                // 2. Build response
+                ReactionResponse response = map(saved);
 
-        reactionRepository.delete(reaction);
-    }
+                // 3. Publish internal event
+                // WebSocket broadcast occurs AFTER COMMIT
+                eventPublisher.publish(
+                                WebSocketEventType.REACTION_ADDED,
+                                conversationId,
+                                response);
 
-    private Message requireAccessibleMessage(
-            Long userId,
-            Long messageId) {
-
-        Message message = messageRepository
-                .findById(messageId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Message not found"));
-
-        Long conversationId = message.getConversation().getId();
-
-        boolean member = memberRepository
-                .existsByConversationIdAndUserIdAndLeftAtIsNull(
-                        conversationId,
-                        userId);
-
-        if (!member) {
-            throw new ForbiddenException(
-                    "You cannot access this message");
+                // 4. Normal REST response
+                return response;
         }
 
-        return message;
-    }
+        @Override
+        public List<ReactionResponse> getReactions(
+                        Long userId,
+                        Long messageId) {
 
-    private String normalizeEmoji(String emoji) {
+                requireAccessibleMessage(
+                                userId,
+                                messageId);
 
-        if (emoji == null || emoji.isBlank()) {
-            throw new BadRequestException(
-                    "Emoji is required");
+                return reactionRepository
+                                .findByMessageIdOrderByCreatedAtAsc(
+                                                messageId)
+                                .stream()
+                                .map(this::map)
+                                .toList();
         }
 
-        String value = emoji.trim();
+        @Override
+        @Transactional
+        public void removeReaction(
+                        Long userId,
+                        Long messageId,
+                        String emoji) {
 
-        if (value.length() > 20) {
-            throw new BadRequestException(
-                    "Emoji is too long");
+                Message message = requireAccessibleMessage(
+                                userId,
+                                messageId);
+
+                Long conversationId = message.getConversation().getId();
+
+                String normalized = normalizeEmoji(emoji);
+
+                MessageReaction reaction = reactionRepository
+                                .findByMessageIdAndUserIdAndEmoji(
+                                                messageId,
+                                                userId,
+                                                normalized)
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Reaction not found"));
+
+                // Build response BEFORE delete
+                ReactionResponse response = map(reaction);
+
+                // Delete reaction
+                reactionRepository.delete(reaction);
+
+                // Publish internal event.
+                // Listener sends it only AFTER transaction commit.
+                eventPublisher.publish(
+                                WebSocketEventType.REACTION_REMOVED,
+                                conversationId,
+                                response);
         }
 
-        return value;
-    }
+        private Message requireAccessibleMessage(
+                        Long userId,
+                        Long messageId) {
 
-    private ReactionResponse map(
-            MessageReaction reaction) {
+                Message message = messageRepository
+                                .findById(messageId)
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Message not found"));
 
-        return new ReactionResponse(
-                reaction.getId(),
-                reaction.getMessage().getId(),
-                reaction.getUser().getId(),
-                reaction.getUser().getUsername(),
-                reaction.getEmoji(),
-                reaction.getCreatedAt());
-    }
+                Long conversationId = message.getConversation().getId();
+
+                boolean member = memberRepository
+                                .existsByConversationIdAndUserIdAndLeftAtIsNull(
+                                                conversationId,
+                                                userId);
+
+                if (!member) {
+                        throw new ForbiddenException(
+                                        "You cannot access this message");
+                }
+
+                return message;
+        }
+
+        private String normalizeEmoji(String emoji) {
+
+                if (emoji == null || emoji.isBlank()) {
+                        throw new BadRequestException(
+                                        "Emoji is required");
+                }
+
+                String value = emoji.trim();
+
+                if (value.length() > 20) {
+                        throw new BadRequestException(
+                                        "Emoji is too long");
+                }
+
+                return value;
+        }
+
+        private ReactionResponse map(
+                        MessageReaction reaction) {
+
+                return new ReactionResponse(
+                                reaction.getId(),
+                                reaction.getMessage().getId(),
+                                reaction.getUser().getId(),
+                                reaction.getUser().getUsername(),
+                                reaction.getEmoji(),
+                                reaction.getCreatedAt());
+        }
 }
