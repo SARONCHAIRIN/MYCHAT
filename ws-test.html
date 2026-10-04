@@ -40,6 +40,9 @@
 
 <body>
 
+    <button onclick="typingStart()">Typing Start</button>
+    <button onclick="typingStop()">Typing Stop</button>
+
     <h2>MYCHAT WebSocket Test</h2>
 
     <label>Access Token</label>
@@ -177,6 +180,54 @@
             }
 
             log("DISCONNECTED");
+        }
+
+        function typingStart() {
+
+            if (!client || !client.connected) {
+                log("ERROR: Connect first");
+                return;
+            }
+
+            const conversationId =
+                document
+                    .getElementById("conversationId")
+                    .value
+                    .trim();
+
+            client.publish({
+                destination: "/app/typing/start",
+
+                body: JSON.stringify({
+                    conversationId: Number(conversationId)
+                })
+            });
+
+            log("SENT: typing:start");
+        }
+
+        function typingStop() {
+
+            if (!client || !client.connected) {
+                log("ERROR: Connect first");
+                return;
+            }
+
+            const conversationId =
+                document
+                    .getElementById("conversationId")
+                    .value
+                    .trim();
+
+            client.publish({
+                destination: "/app/typing/stop",
+
+                body: JSON.stringify({
+                    conversationId: Number(conversationId)
+                })
+            });
+
+            log("SENT: typing:stop");
         }
     </script>
 
