@@ -213,6 +213,16 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- ===================================== -->
+        <!-- Firebase Admin -->
+        <!-- ===================================== -->
+
+        <dependency>
+            <groupId>com.google.firebase</groupId>
+            <artifactId>firebase-admin</artifactId>
+            <version>9.11.0</version>
+        </dependency>
+
 
     </dependencies>
 

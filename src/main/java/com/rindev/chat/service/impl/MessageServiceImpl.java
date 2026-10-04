@@ -14,6 +14,7 @@ import com.rindev.chat.exception.BadRequestException;
 import com.rindev.chat.exception.ForbiddenException;
 import com.rindev.chat.exception.ResourceNotFoundException;
 import com.rindev.chat.mapper.MessageMapper;
+import com.rindev.chat.notification.MessageNotificationPublisher;
 import com.rindev.chat.repository.BlockedUserRepository;
 import com.rindev.chat.repository.ConversationMemberRepository;
 import com.rindev.chat.repository.ConversationRepository;
@@ -42,6 +43,7 @@ public class MessageServiceImpl implements MessageService {
         private final ConversationEventPublisher eventPublisher;
         private final BlockedUserRepository blockedUserRepository;
         private final MessageMapper messageMapper;
+        private final MessageNotificationPublisher notificationPublisher;
 
         public MessageServiceImpl(
                         MessageRepository messageRepository,
@@ -50,7 +52,8 @@ public class MessageServiceImpl implements MessageService {
                         UserRepository userRepository,
                         ConversationEventPublisher eventPublisher,
                         BlockedUserRepository blockedUserRepository,
-                        MessageMapper messageMapper) {
+                        MessageMapper messageMapper,
+                        MessageNotificationPublisher notificationPublisher) {
                 this.messageRepository = messageRepository;
                 this.conversationRepository = conversationRepository;
                 this.memberRepository = memberRepository;
@@ -58,6 +61,7 @@ public class MessageServiceImpl implements MessageService {
                 this.eventPublisher = eventPublisher;
                 this.blockedUserRepository = blockedUserRepository;
                 this.messageMapper = messageMapper;
+                this.notificationPublisher = notificationPublisher;
         }
 
         @Override
@@ -124,6 +128,12 @@ public class MessageServiceImpl implements MessageService {
                                 WebSocketEventType.MESSAGE_NEW,
                                 conversationId,
                                 response);
+
+                // Publish message notification
+                notificationPublisher.publish(
+                                saved.getId(),
+                                conversationId,
+                                authenticatedUserId);
 
                 // 5. Return normal REST response
                 return response;
