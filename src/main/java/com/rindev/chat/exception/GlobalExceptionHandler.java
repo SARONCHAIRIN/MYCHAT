@@ -77,10 +77,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException exception,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         var errors = new LinkedHashMap<String, String>();
-        exception.getBindingResult().getFieldErrors().forEach(error ->
-                errors.putIfAbsent(error.getField(), safeMessage(error)));
-        exception.getBindingResult().getGlobalErrors().forEach(error ->
-                errors.putIfAbsent("request", safeMessage(error)));
+        exception.getBindingResult().getFieldErrors()
+                .forEach(error -> errors.putIfAbsent(error.getField(), safeMessage(error)));
+        exception.getBindingResult().getGlobalErrors()
+                .forEach(error -> errors.putIfAbsent("request", safeMessage(error)));
         return handleExceptionInternal(exception,
                 ErrorResponse.of("VALIDATION_ERROR", "Request validation failed", errors),
                 headers, status, request);
@@ -99,8 +99,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             String field = name == null ? "request" : name;
             result.getResolvableErrors().forEach(error -> errors.putIfAbsent(field, safeMessage(error)));
         });
-        exception.getCrossParameterValidationResults().forEach(error ->
-                errors.putIfAbsent("request", safeMessage(error)));
+        exception.getCrossParameterValidationResults()
+                .forEach(error -> errors.putIfAbsent("request", safeMessage(error)));
         return handleExceptionInternal(exception,
                 ErrorResponse.of("VALIDATION_ERROR", "Request validation failed", errors),
                 headers, status, request);
@@ -143,7 +143,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return safeConstraintMessage(codes == null || codes.length == 0 ? "" : codes[codes.length - 1]);
     }
 
-    // Never render validator messages: custom templates can interpolate rejected passwords or tokens.
+    // Never render validator messages: custom templates can interpolate rejected
+    // passwords or tokens.
     private String safeConstraintMessage(String constraint) {
         return switch (constraint) {
             case "NotBlank", "NotEmpty", "NotNull" -> "This field is required";
@@ -151,7 +152,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             case "Email" -> "Must be a valid email address";
             case "Pattern" -> "Invalid format";
             case "Min", "Max", "DecimalMin", "DecimalMax", "Positive", "PositiveOrZero",
-                    "Negative", "NegativeOrZero" -> "Value is outside the allowed range";
+                    "Negative", "NegativeOrZero" ->
+                "Value is outside the allowed range";
             default -> "Invalid value";
         };
     }
