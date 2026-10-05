@@ -18,11 +18,19 @@ spring:
         jdbc:
           time_zone: UTC
 
-  # Database already has 13 tables.
-  # Enable Flyway after we baseline the existing schema.
+  # # Database already has 13 tables.
+  # # Enable Flyway after we baseline the existing schema.
+  # flyway:
+  #   enabled: ${FLYWAY_ENABLED:false}
+  #   baseline-on-migrate: false
+
   flyway:
+
     enabled: ${FLYWAY_ENABLED:false}
-    baseline-on-migrate: false
+
+    baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:false}
+
+    baseline-version: ${FLYWAY_BASELINE_VERSION:1}
 
   sql:
     init:
