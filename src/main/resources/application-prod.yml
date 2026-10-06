@@ -1,0 +1,56 @@
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    baseline-on-migrate: false
+    baseline-version: 1
+    clean-disabled: true
+    validate-on-migrate: true
+  mvc:
+    log-request-details: false
+  web:
+    error:
+      include-exception: false
+      include-message: never
+      include-binding-errors: never
+      include-stacktrace: never
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
+
+app:
+  upload:
+    directory: ${UPLOAD_DIR}
+  origins:
+    # Empty lists permit no cross-origin browser clients. Use exact origins.
+    http: ${CORS_ALLOWED_ORIGINS:}
+    websocket: ${WEBSOCKET_ALLOWED_ORIGINS:}
+
+server:
+  shutdown: graceful
+
+logging:
+  level:
+    root: INFO
+    org.springframework.web: WARN
+    org.springframework.messaging: WARN
+    org.springframework.security: WARN
+    org.hibernate.SQL: "OFF"
+    org.hibernate.orm.jdbc.bind: "OFF"
+    org.hibernate.orm.jdbc.extract: "OFF"
+    com.google.auth: WARN
+    com.google.api.client: WARN

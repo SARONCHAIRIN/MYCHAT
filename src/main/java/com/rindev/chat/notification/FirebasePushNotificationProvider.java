@@ -12,72 +12,71 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class FirebasePushNotificationProvider
-        implements PushNotificationProvider {
+                implements PushNotificationProvider {
 
-    private static final Logger log = LoggerFactory.getLogger(
-            FirebasePushNotificationProvider.class);
+        private static final Logger log = LoggerFactory.getLogger(
+                        FirebasePushNotificationProvider.class);
 
-    private final FirebaseMessaging firebaseMessaging;
+        private final FirebaseMessaging firebaseMessaging;
 
-    public FirebasePushNotificationProvider(
-            FirebaseMessaging firebaseMessaging) {
-        this.firebaseMessaging = firebaseMessaging;
-    }
-
-    @Override
-    public PushNotificationResult send(
-            PushNotificationRequest request) {
-
-        try {
-            Message.Builder builder =
-
-                    Message.builder()
-
-                            .setToken(request.token())
-
-                            .setNotification(
-
-                                    Notification.builder()
-
-                                            .setTitle(request.title())
-
-                                            .setBody(request.body())
-
-                                            .build());
-
-            if (request.data() != null
-                    && !request.data().isEmpty()) {
-                builder.putAllData(request.data());
-            }
-
-            String messageId = firebaseMessaging.send(
-                    builder.build());
-
-            log.debug(
-                    "FCM message sent successfully: {}",
-                    messageId);
-
-            return PushNotificationResult.sent();
-
-        } catch (FirebaseMessagingException ex) {
-
-            MessagingErrorCode errorCode = ex.getMessagingErrorCode();
-
-            if (errorCode == MessagingErrorCode.UNREGISTERED) {
-
-                log.info(
-                        "FCM token is no longer registered");
-
-                return PushNotificationResult
-                        .invalidDeviceToken();
-            }
-
-            log.warn(
-                    "FCM send failed. errorCode={}",
-                    errorCode,
-                    ex);
-
-            return PushNotificationResult.failed();
+        public FirebasePushNotificationProvider(
+                        FirebaseMessaging firebaseMessaging) {
+                this.firebaseMessaging = firebaseMessaging;
         }
-    }
+
+        @Override
+        public PushNotificationResult send(
+                        PushNotificationRequest request) {
+
+                try {
+                        Message.Builder builder =
+
+                                        Message.builder()
+
+                                                        .setToken(request.token())
+
+                                                        .setNotification(
+
+                                                                        Notification.builder()
+
+                                                                                        .setTitle(request.title())
+
+                                                                                        .setBody(request.body())
+
+                                                                                        .build());
+
+                        if (request.data() != null
+                                        && !request.data().isEmpty()) {
+                                builder.putAllData(request.data());
+                        }
+
+                        String messageId = firebaseMessaging.send(
+                                        builder.build());
+
+                        log.debug(
+                                        "FCM message sent successfully: {}",
+                                        messageId);
+
+                        return PushNotificationResult.sent();
+
+                } catch (FirebaseMessagingException ex) {
+
+                        MessagingErrorCode errorCode = ex.getMessagingErrorCode();
+
+                        if (errorCode == MessagingErrorCode.UNREGISTERED) {
+
+                                log.info(
+                                                "FCM token is no longer registered");
+
+                                return PushNotificationResult
+                                                .invalidDeviceToken();
+                        }
+
+                        log.warn(
+                                        "FCM send failed. errorCode={}",
+                                        errorCode);
+
+                        return PushNotificationResult.failed();
+                }
+        }
 }

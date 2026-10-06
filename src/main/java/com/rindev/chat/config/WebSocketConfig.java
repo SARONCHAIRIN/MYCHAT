@@ -1,6 +1,7 @@
 package com.rindev.chat.config;
 
 import com.rindev.chat.websocket.WebSocketAuthInterceptor;
+import com.rindev.chat.websocket.SafeStompErrorHandler;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
@@ -14,19 +15,22 @@ public class WebSocketConfig
         implements WebSocketMessageBrokerConfigurer {
 
     private final WebSocketAuthInterceptor authInterceptor;
+    private final OriginPolicy origins;
 
     public WebSocketConfig(
-            WebSocketAuthInterceptor authInterceptor) {
+            WebSocketAuthInterceptor authInterceptor, OriginPolicy origins) {
         this.authInterceptor = authInterceptor;
+        this.origins = origins;
     }
 
     @Override
     public void registerStompEndpoints(
             StompEndpointRegistry registry) {
 
+        registry.setErrorHandler(new SafeStompErrorHandler());
         registry
                 .addEndpoint("/ws")
-                .setAllowedOriginPatterns("*");
+                .setAllowedOriginPatterns(origins.websocket().toArray(String[]::new));
     }
 
     @Override

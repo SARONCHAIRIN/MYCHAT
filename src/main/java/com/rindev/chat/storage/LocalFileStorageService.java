@@ -4,17 +4,20 @@ import com.rindev.chat.exception.BadRequestException;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class LocalFileStorageService implements FileStorageService {
 
-    private final Path root = Paths.get("uploads")
-            .toAbsolutePath()
-            .normalize();
+    private final Path root;
 
-    public LocalFileStorageService() {
+    public LocalFileStorageService(@Value("${app.upload.directory:uploads}") String directory) {
+        if (directory == null || directory.isBlank()) {
+            throw new IllegalArgumentException("Upload directory must not be blank");
+        }
+        this.root = Paths.get(directory).toAbsolutePath().normalize();
         try {
             Files.createDirectories(root);
         } catch (IOException e) {

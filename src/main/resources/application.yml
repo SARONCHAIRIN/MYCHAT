@@ -5,7 +5,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/chat_db?sslMode=DISABLED&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true}
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:312007}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -18,25 +18,19 @@ spring:
         jdbc:
           time_zone: UTC
 
-  # # Database already has 13 tables.
-  # # Enable Flyway after we baseline the existing schema.
-  # flyway:
-  #   enabled: ${FLYWAY_ENABLED:false}
-  #   baseline-on-migrate: false
-
+  # Existing databases must already have an explicitly reviewed baseline.
   flyway:
-
     enabled: ${FLYWAY_ENABLED:false}
-
-    baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:false}
-
-    baseline-version: ${FLYWAY_BASELINE_VERSION:1}
+    baseline-on-migrate: false
+    baseline-version: 1
+    clean-disabled: true
+    validate-on-migrate: true
 
   sql:
     init:
       mode: never
 
-# API documentation is configured in Phase 5.
+# Useful locally; the prod profile disables both unless explicitly enabled.
 springdoc:
   api-docs:
     enabled: true
@@ -56,6 +50,34 @@ security:
     ttl: ${REFRESH_TOKEN_TTL:30d}
   jwt:
     # Required Base64-encoded random key, at least 32 bytes before encoding.
-    secret: ${JWT_SECRET:}
+    secret: ${JWT_SECRET}
     issuer: ${JWT_ISSUER:chat-backend}
     access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:15m}
+
+app:
+  upload:
+    directory: ${UPLOAD_DIR:uploads}
+  origins:
+    http: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+    websocket: ${WEBSOCKET_ALLOWED_ORIGINS:*}
+
+# Only the aggregate health status is exposed, without component or error details.
+management:
+  endpoints:
+    access:
+      default: none
+    web:
+      exposure:
+        include: health
+      discovery:
+        enabled: false
+    jmx:
+      exposure:
+        exclude: "*"
+  endpoint:
+    health:
+      access: read-only
+      show-details: never
+      show-components: never
+      probes:
+        enabled: false

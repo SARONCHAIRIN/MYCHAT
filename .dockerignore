@@ -1,0 +1,20 @@
+# Deny by default: runtime uploads, local credentials, Git data and tests never
+# enter the build context. Add new required application resources explicitly.
+**
+
+!pom.xml
+!mvnw
+!.mvn/
+!.mvn/wrapper/
+!.mvn/wrapper/maven-wrapper.properties
+
+!src/
+!src/main/
+!src/main/java/
+!src/main/java/**/*.java
+!src/main/resources/
+!src/main/resources/application.yml
+!src/main/resources/application-prod.yml
+!src/main/resources/db/
+!src/main/resources/db/migration/
+!src/main/resources/db/migration/*.sql

@@ -48,12 +48,16 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             return message;
         }
 
-        if (StompCommand.CONNECT.equals(command)) {
+        if (StompCommand.CONNECT.equals(command) || StompCommand.STOMP.equals(command)) {
             authenticate(accessor);
         }
 
         if (StompCommand.SUBSCRIBE.equals(command)) {
             authorizeSubscription(accessor);
+        }
+
+        if (StompCommand.SEND.equals(command)) {
+            authorizeSend(accessor);
         }
 
         return message;
@@ -66,6 +70,10 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
         if (authorization == null) {
             authorization = accessor.getFirstNativeHeader("authorization");
         }
+
+        // The framework retains CONNECT frames for lifecycle events and diagnostics.
+        accessor.removeNativeHeader("Authorization");
+        accessor.removeNativeHeader("authorization");
 
         if (authorization == null
                 || !authorization.startsWith(BEARER_PREFIX)) {
@@ -86,6 +94,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
         Long userId = jwtService.parseUserId(token);
 
         ChatUserDetails principal = userDetailsService.loadUserById(userId);
+        principal.eraseCredentials();
 
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                 principal,
@@ -93,6 +102,21 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                 principal.getAuthorities());
 
         accessor.setUser(authentication);
+    }
+
+    private void authorizeSend(StompHeaderAccessor accessor) {
+        if (!(accessor.getUser() instanceof UsernamePasswordAuthenticationToken authentication)
+                || !authentication.isAuthenticated()
+                || !(authentication.getPrincipal() instanceof ChatUserDetails)) {
+            throw new IllegalArgumentException("WebSocket authentication required");
+        }
+
+        // Clients may invoke existing application handlers, but must never publish
+        // directly to broker topics or queues and impersonate server events.
+        String destination = accessor.getDestination();
+        if (!"/app/typing/start".equals(destination) && !"/app/typing/stop".equals(destination)) {
+            throw new IllegalArgumentException("Message destination is not allowed");
+        }
     }
 
     private void authorizeSubscription(
