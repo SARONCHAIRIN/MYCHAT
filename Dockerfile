@@ -8,6 +8,7 @@ RUN chmod +x mvnw \
     && ./mvnw --batch-mode --no-transfer-progress dependency:go-offline
 
 COPY src/main ./src/main
+
 RUN ./mvnw --batch-mode --no-transfer-progress -Dmaven.test.skip=true package
 
 FROM eclipse-temurin:21-jre-jammy AS runtime
