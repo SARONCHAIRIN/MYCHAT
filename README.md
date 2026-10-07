@@ -1,21 +1,24 @@
-# Chat backend
+# MYCHAT backend
 
-Java 21, Maven, Spring Boot 4.1.1, and the existing MySQL `chat_db` schema for a
-Flutter chat client. Phase 1 is complete with 13 JPA entities, 13 repositories,
-and 11 enums. Phase 3 adds stateless Bearer JWT security infrastructure.
-Phase 2's shared API response/error contracts remain unimplemented, as do the
-Phase 4 authentication endpoints and later business/real-time APIs.
+Java 21, Maven wrapper, Spring Boot, and MySQL backend for MYCHAT. Phases 1–24
+provide the existing REST APIs, JWT authentication and refresh tokens,
+WebSocket/STOMP messaging, FCM notifications, file uploads, and tests. Phase 25
+adds production configuration and deployment support while preserving those
+contracts and the original 13 application tables.
 
-[`BACKEND_TASK.md`](BACKEND_TASK.md) records phase status, scope, and actual
-verification results.
+[`BACKEND_TASK.md`](BACKEND_TASK.md) records phase status and executed verification
+results. Phase 26 — Flutter API Handoff is the next phase and is outside this
+change.
 
 ## Run locally
 
-1. Select a Java 21 JDK with `JAVA_HOME` and confirm `./mvnw --version` reports it.
-   On this Mac the installed JDK is
+1. Select a Java 21 JDK with `JAVA_HOME`; confirm `./mvnw --version` reports Java 21.
+   On macOS with Homebrew, an installation may be available at
    `/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`.
-2. Start Docker Desktop and the existing MySQL container (`docker start chat`).
-3. Supply the environment variables below in your shell or IDE run configuration.
+2. Start the existing local MySQL database, for example `docker start chat`.
+3. Supply `DB_PASSWORD`, `JWT_SECRET`, and Firebase Application Default
+   Credentials through your shell, IDE, or runtime secret provider. Override
+   `DB_USERNAME` and `DB_URL` when needed.
 4. Run:
 
    ```sh
@@ -24,165 +27,273 @@ verification results.
    ./mvnw spring-boot:run
    ```
 
-| Variable | Default / purpose |
+The default profile retains the existing localhost JDBC URL, `root` development
+username, relative `uploads/` directory, enabled Swagger, and permissive local
+WebSocket origins. There is no database-password or JWT-secret fallback. The
+localhost JDBC URL disables TLS and permits public-key retrieval for local MySQL
+authentication; production must supply its own JDBC URL and TLS settings. Keep
+UTC connection/session settings when replacing the URL.
+
+Spring Boot does not automatically load `.env` files. Export variables or inject
+them into the process. Flyway remains disabled by default locally; enable it only
+after reviewing the database history as described below. Hibernate always uses
+`ddl-auto=validate`, and SQL initialization is disabled.
+
+## Production environment
+
+Select `prod` explicitly outside Docker. The Docker image selects it by default.
+Required values must be supplied at runtime; none are baked into the image.
+
+| Variable | Production requirement / default |
 | --- | --- |
-| `DB_PASSWORD` | Required MySQL password; no checked-in default |
-| `DB_USERNAME` | `root` for the existing local development database |
-| `DB_URL` | Local MySQL on port 3306, database `chat_db`, UTC session |
-| `JWT_SECRET` | Required for application startup: Base64-encoded cryptographically random signing key containing at least 32 decoded bytes; no default |
-| `JWT_ISSUER` | `chat-backend`; must be nonblank without surrounding whitespace |
-| `JWT_ACCESS_TOKEN_TTL` | `15m`; a positive duration containing a whole number of seconds |
+| `SPRING_PROFILES_ACTIVE` | Set to `prod`; already set by the Docker image |
+| `DB_URL` | Required JDBC URL for a private MySQL host, correct database, TLS policy, and UTC session settings; no production default |
+| `DB_USERNAME` | Required deployment database account; no production default |
+| `DB_PASSWORD` | Required runtime secret; no default |
+| `JWT_SECRET` | Required Base64-encoded cryptographically random key with at least 32 decoded bytes; no default |
+| `JWT_ISSUER` | `chat-backend`; nonblank without surrounding whitespace |
+| `JWT_ACCESS_TOKEN_TTL` | `15m`; positive duration in whole seconds |
+| `REFRESH_TOKEN_TTL` | `30d` |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to a runtime-mounted credential file when using file-based Firebase Application Default Credentials; omit when a managed workload identity supplies ADC |
+| `UPLOAD_DIR` | Required writable, persistent directory; the Docker image sets `/app/uploads` |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated exact trusted HTTP(S) browser origins; empty by default in production |
+| `WEBSOCKET_ALLOWED_ORIGINS` | Comma-separated exact trusted HTTP(S) WebSocket origins; empty by default in production |
+| `SWAGGER_ENABLED` | `false` in production; setting `true` enables both OpenAPI and Swagger UI |
+| `FLYWAY_ENABLED` | `true` in production; disable only when a separate deployment step has already applied and validated the same migrations |
 | `SERVER_PORT` | `8080` |
 
-The default JDBC URL disables TLS for localhost and permits public-key retrieval
-for local MySQL authentication. Override `DB_URL` with the appropriate connection
-and TLS settings outside local development. Keep the UTC connection/session
-settings when overriding the URL. Environment variables must be exported or set
-in the IDE; Spring Boot does not automatically read a `.env` file.
+Use a secret manager or protected runtime injection for credentials. Do not put
+values in checked-in YAML, Docker build arguments, command-line arguments,
+application logs, or committed environment files. Keep database URLs free of
+embedded passwords. Required missing/invalid credentials must be corrected before
+the service is put into traffic.
 
-Keep the signing key outside source control and logs. Retain the same key across
-application restarts when existing access tokens should remain usable; replacing
-it invalidates tokens signed with the previous key. Missing, malformed, or short
-signing keys fail application startup. Tests generate their own keys in memory,
-so `JWT_SECRET` is not needed for the test commands below.
-
-Startup must connect to MySQL and complete Hibernate `ddl-auto=validate`. It does
-not create or alter tables. SQL initialization and Flyway are disabled. Custom
-JWT protection replaces default Spring Security login behavior. OpenAPI
-auto-exposure is disabled until Phase 5.
-
-## Security foundation
-
-Supply access tokens through `Authorization: Bearer <access-token>`. The JWT
-service uses only HS256, validates the signature, and requires these claims:
-
-| Claim | Requirement |
-| --- | --- |
-| `sub` | Canonical positive decimal user ID within the Java `Long` range |
-| `iss` | Exact configured issuer |
-| `iat` | Issue time, required and no later than the current time |
-| `exp` | Expiry time, required and later than both the issue time and current time |
-| `token_type` | Exactly `access` |
-
-Token lifetime cannot exceed the configured access-token TTL. Validation uses
-zero clock skew; servers must keep their clocks synchronized. JWT timestamps use
-whole-second precision. The service can issue tokens internally, but no HTTP
-login or token-issuance endpoint exists yet.
-
-Each authenticated request reloads the user from MySQL by the verified subject
-ID. Deleted or unknown users are rejected. The principal contains the current
-database username and ID, and credentials are erased after authentication.
-The schema has no global roles, so principals receive no invented authorities;
-conversation membership roles remain resource-specific. `ONLINE`/`OFFLINE`
-indicates presence and does not disable accounts.
-
-The filter chain accepts credentials only from the explicit Bearer header.
-Sessions, HTTP Basic, form login, cookies, and query parameters do not authenticate
-requests. CSRF protection is disabled for this stateless header-based mechanism;
-any future cookie-based authentication must revisit that decision. Duplicate or
-malformed Authorization headers are rejected, including invalid Bearer tokens
-supplied on public routes.
-
-Only these method/path combinations permit unauthenticated requests:
-
-- `POST /api/v1/auth/register`
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/refresh`
-
-These are access rules for future Phase 4 endpoints; the endpoints themselves
-are not implemented. Every other client request requires authentication,
-including other methods on these paths, `/api/v1/auth/me`, and
-`/api/v1/auth/logout`. Internal servlet `ERROR` dispatches are permitted so
-container errors retain their status; direct requests to `/error` remain
-protected.
-
-Security failures return JSON with `success: false`, `code`, `message`, and an
-ISO 8601 UTC `timestamp`. A 401 uses `UNAUTHORIZED` / `Authentication required`
-and a `WWW-Authenticate: Bearer` header; a 403 uses `FORBIDDEN` / `Access denied`.
-These responses exclude credentials, claims, exception details, and stack
-traces. A security-local writer provides this contract while Phase 2's shared
-MVC response and exception handling remain pending.
-
-A database-backed authentication manager and BCrypt password encoder with cost
-12 are available for Phase 4. Registration, login, refresh-token storage/rotation,
-logout, and per-token revocation are not implemented. Existing passwords and
-database records are unchanged.
-
-## Schema and mapping decisions
-
-[`docs/schema/existing-chat-db.sql`](docs/schema/existing-chat-db.sql) is a
-schema-only snapshot read from the existing MySQL container. It is reference
-material, not a startup script or Flyway migration. Do not execute it against the
-existing `chat_db`.
-
-- Uppercase Java enum constants use JPA 3.2 `@EnumeratedValue` to read/write the
-  existing lowercase MySQL enum literals.
-- Foreign-key relationships are lazy. No cascade persistence/removal or
-  bidirectional collections are introduced; existing database constraints remain
-  authoritative.
-- MySQL owns generated creation/update timestamps. Hibernate retrieves them after
-  writes. `DATETIME` and `TIMESTAMP` map to `LocalDateTime`, interpreted as UTC;
-  JDBC connection/session and Hibernate time zones are configured accordingly.
-- Nullable flags use `Boolean`. Java initializers match the existing enum and
-  flag defaults while still allowing SQL nulls where the schema permits them.
-- Unsigned `INT` attachment dimensions/duration use `Long` to retain their full
-  range. Unsigned `BIGINT` identifiers/file sizes use `Long`, supporting values
-  through `Long.MAX_VALUE`; larger values would require a coordinated mapping
-  and API change.
-- Text columns map to strings with the existing MySQL `TEXT` type. Entities are
-  persistence objects and are not REST response contracts.
-
-## Verification
-
-Run the full suite under Java 21:
+For Maven-based production startup, after exporting the required values:
 
 ```sh
+./mvnw spring-boot:run -Dspring-boot.run.profiles=prod
+```
+
+For a packaged application:
+
+```sh
+./mvnw -DskipTests package
+SPRING_PROFILES_ACTIVE=prod java -jar target/chat-backend-0.0.1-SNAPSHOT.jar
+```
+
+Run the verification commands separately before deploying. These startup commands
+connect to the configured database and may apply pending Flyway migrations.
+
+## Database and Flyway deployment
+
+Keep MySQL on a private network, reachable only by the application and authorized
+operators. Do not publish port 3306 to public interfaces. Use a dedicated account
+with only the required privileges and a JDBC URL appropriate for the deployment's
+TLS policy. The existing local `chat` container publishes port 3306 on all host
+interfaces; that development configuration must not be copied into production.
+Phase 25 does not reconfigure that existing container.
+
+No migration was added or changed for Phase 25. The original 13 tables are
+preserved. Existing migrations are:
+
+- `V2__create_refresh_tokens.sql`: adds the refresh-token table.
+- `V3__add_message_pagination_index.sql`: adds the message pagination index.
+
+The inspected existing `chat_db` contains **14 application tables**, including
+`refresh_tokens`, plus `flyway_schema_history`. Its recorded history has a
+**version 2 BASELINE** and a successful **V3** migration. Preserve this established
+history. Do not rebaseline that database at version 1, delete its history, or
+replay V2: its refresh-token table already exists.
+
+The reviewed strategy for a different database containing only the **original 13
+tables**, with no Flyway history and no refresh-token table, remains an explicit
+**version 1 baseline**, followed by V2 and V3. A baseline records the already
+existing schema; it does not create it. Never select a baseline version solely to
+silence a migration error.
+
+Deployment procedure:
+
+1. Back up the database and confirm restore procedures. Review the actual schema
+   and `flyway_schema_history` against the intended release. The schema snapshot
+   at [`docs/schema/existing-chat-db.sql`](docs/schema/existing-chat-db.sql) is
+   reference material for the original tables, not an executable startup script.
+2. If history already exists, preserve and validate it. If onboarding a reviewed
+   original 13-table schema without history, perform an explicit Flyway baseline
+   operation at version 1 using deployment-provided credentials. For other schema
+   states, reconcile history with the actual schema before deployment.
+3. Start one migration-capable deployment instance with the `prod` profile. Flyway
+   is enabled by default, validates migration checksums/history, and applies only
+   pending migrations before Hibernate validates the entities. Provide the
+   controlled database privileges required by the reviewed pending migrations.
+4. Verify successful startup, schema validation, migration history, and health
+   before sending traffic. Coordinate releases and backups; do not use destructive
+   automatic rollback or recreate the schema on failure.
+
+Alternatively, a controlled external Flyway deployment job may validate/apply the
+same release migrations using separate migration privileges. Set
+`FLYWAY_ENABLED=false` on the application only after that job succeeds and the
+resulting schema/history has been verified. Hibernate validation still runs.
+
+Both profiles keep `baseline-on-migrate=false`, `clean-disabled=true`, and
+`validate-on-migrate=true`. `ddl-auto=validate` and `spring.sql.init.mode=never`
+remain in force. Empty-database provisioning requires a separately reviewed schema
+process; this repository deliberately has no table-recreating V1 migration.
+
+## Firebase credentials
+
+Firebase uses Google Application Default Credentials (ADC). In production, prefer
+an attached workload identity where supported, or mount a service-account JSON
+file from a secret store and set `GOOGLE_APPLICATION_CREDENTIALS` to its runtime
+path. Mount files read-only and permit the runtime user to read them. The service
+account needs the appropriate Firebase project permissions for FCM.
+
+Do not commit JSON credentials or copy them into the image. Do not add a repository
+classpath fallback. The application requires usable ADC to initialize Firebase;
+a health request does not test actual FCM delivery. Local runs and application
+context integration tests also require ADC. Keep developer credentials outside
+the repository.
+
+## Upload storage
+
+`FileStorageService` remains the storage abstraction; `LocalFileStorageService`
+stores file bytes on disk and existing database metadata stays in MySQL. There is
+no S3 dependency or binary storage in MySQL.
+
+Set `UPLOAD_DIR` to a persistent writable path in production. The directory is
+created if needed; failure to initialize it prevents startup. Container storage
+uses `/app/uploads` owned by UID/GID **10001:10001**. Use a persistent volume or a
+bind mount with matching write permissions, and include uploads in the backup and
+restore plan. A custom `UPLOAD_DIR` requires a corresponding persistent mount.
+Existing returned `/uploads/...` references retain their format.
+
+`uploads/` is ignored by Git and excluded from the Docker context. Previously
+tracked runtime uploads are removed from version control while retained locally.
+Do not stage runtime uploads even if a deployment uses a different directory.
+
+## Browser origins and API documentation
+
+HTTP API CORS applies to `/api/**`. Configure `CORS_ALLOWED_ORIGINS` with exact
+origins such as `https://chat.example.com,https://admin.example.com`. Bearer headers
+are supported; cookie credentials are not enabled. Local HTTP defaults allow
+`http://localhost:3000` and `http://localhost:5173`.
+
+Configure `/ws` WebSocket/STOMP origins separately with
+`WEBSOCKET_ALLOWED_ORIGINS`. Local development retains its wildcard default.
+Production defaults for both origin lists are empty, permitting no cross-origin
+browser clients. Same-origin behavior remains available. Production rejects
+wildcards and malformed origins at startup; specify scheme, hostname, and optional
+port, without paths, queries, or fragments. Origin controls do not replace JWT or
+conversation authorization. Native clients must still authenticate normally.
+
+Swagger UI at `/swagger-ui/index.html` and OpenAPI at `/v3/api-docs` remain enabled
+locally. In `prod`, both are disabled by default, and SecurityConfig denies access
+to documentation routes even for authenticated callers. `SWAGGER_ENABLED=true`
+explicitly enables both and permits access; use it only when documentation
+exposure is intended and apply deployment-level access restrictions as needed.
+
+## Health and production logging
+
+Unauthenticated `GET /actuator/health` (and `HEAD`) is permitted for load balancers
+and container health checks. Healthy responses expose only the aggregate status:
+
+```json
+{"status":"UP"}
+```
+
+The health endpoint includes the configured contributors, including the database.
+It does not expose component names, database metadata, exception messages, or
+stack traces. All other actuator paths are denied, only health is exposed over
+HTTP, discovery is disabled, and actuator JMX exposure is disabled. This endpoint
+reports application health; it is not an end-to-end test of messaging or FCM.
+
+```sh
+curl --fail --silent --show-error http://127.0.0.1:8080/actuator/health
+```
+
+Production defaults to INFO application logging with reduced framework logging;
+SQL parameter/value logging and HTTP request-detail logging are disabled. HTTP
+errors suppress internal exception details. STOMP error frames use safe messages.
+Do not enable request/header/body or SQL bind tracing in production: it may reveal
+passwords, JWTs, refresh/access tokens, Firebase credentials, or FCM tokens.
+
+## Docker
+
+The multi-stage Dockerfile builds with the Maven wrapper on Java 21 and runs on a
+Java 21 JRE as non-root UID/GID **10001:10001**. The build excludes tests and never
+needs database or Firebase credentials; run the full suite before deployment.
+`.dockerignore` allows only required build/application files into the context.
+
+```sh
+docker build --tag mychat-backend:phase25 .
+docker network create mychat-private
+docker volume create mychat-uploads
+```
+
+Connect a separately provisioned MySQL service to the private deployment network
+without publishing its port. Export the environment values from the table before
+running the following example. `FIREBASE_CREDENTIALS_FILE` is the absolute path of
+a credential file outside the repository, readable by the container user. Variable
+names pass existing values to Docker without placing secret literals in the
+command:
+
+```sh
+docker run --detach --name mychat-backend \
+  --network mychat-private \
+  --publish 127.0.0.1:8080:8080 \
+  --env DB_URL --env DB_USERNAME --env DB_PASSWORD --env JWT_SECRET \
+  --env CORS_ALLOWED_ORIGINS --env WEBSOCKET_ALLOWED_ORIGINS \
+  --env GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/firebase.json \
+  --mount type=bind,source="${FIREBASE_CREDENTIALS_FILE}",target=/run/secrets/firebase.json,readonly \
+  --mount type=volume,source=mychat-uploads,target=/app/uploads \
+  --restart unless-stopped \
+  mychat-backend:phase25
+```
+
+For managed workload identity, omit the credential-file environment variable and
+bind mount. Put a TLS-terminating reverse proxy/load balancer in front of the
+application and forward WebSocket upgrade requests. The example binds HTTP to
+localhost; adapt ingress routing to the deployment network. Restrict access to
+the Docker daemon, which can inspect container environment values.
+
+The image runs the production profile and probes `/actuator/health` every 30
+seconds, with a 60-second startup grace period; three failures mark it unhealthy. The probe
+uses `SERVER_PORT` when overridden. Check the reported container health:
+
+```sh
+docker inspect --format '{{.State.Health.Status}}' mychat-backend
+```
+
+## Security and verification
+
+Keep credentials and runtime files outside version control. Existing secret
+fallbacks have been removed; any credential previously stored in source/history
+should be rotated through the appropriate external system. Rotation of
+`JWT_SECRET` invalidates existing access tokens signed by the old key. Never
+include token values in diagnostics, issue reports, or shell tracing.
+
+Retain stateless Bearer JWT authentication, existing refresh-token behavior,
+resource access checks, WebSocket authentication, and safe error responses. Run
+servers with synchronized clocks for JWT expiry validation. Production deployment
+must preserve database and upload backups and protect TLS connections.
+
+Use Java 21 and run:
+
+```sh
+./mvnw --version
 ./mvnw clean compile
 ./mvnw test
 ```
 
-The full suite requires the configured existing MySQL database and
-`DB_PASSWORD`, plus `DB_USERNAME`/`DB_URL` overrides when needed. Tests generate
-random JWT keys in memory, so no deployment signing key is required.
+The complete suite requires the configured MySQL database, `DB_PASSWORD`, and
+Firebase ADC for application context startup. Tests generate JWT keys in memory;
+they do not need the deployment signing key. Foundation checks read the original
+13 entities plus refresh tokens without writing database rows. The 14 auth API
+integration cases remain opt-in with `CHAT_WRITE_TESTS=true`; run those only
+against an appropriate test database because they write test records. Their
+existing default skip behavior is preserved.
 
-The Phase 1 integration tests run read-only transactions: no test rows are
-inserted, updated, or deleted. They validate application context startup, all
-13 entity/repository registrations, bounded entity reads, and every native enum
-column against the Java enum values. Hibernate validation does not
-comprehensively verify foreign keys, indexes, defaults, or enum members; the
-schema reference and explicit enum checks cover the corresponding Phase 1 review.
-
-Run only the security tests without MySQL or `DB_PASSWORD`:
-
-```sh
-./mvnw -Dtest=JwtServiceTest,CustomUserDetailsServiceTest,SecurityIntegrationTest test
-```
-
-Security tests cover JWT signatures/claims/expiry/configuration, identity and
-credential handling, the production filter chain's public/protected rules,
-stateless requests, safe 401/403 responses, and BCrypt authentication. Their
-controllers and mocked repositories exist only in test code. See
-[`BACKEND_TASK.md`](BACKEND_TASK.md) for executed commands and results; the commands
-here describe how to verify the project.
-
-## Flyway baseline strategy
-
-Flyway stays disabled, and `baseline-on-migrate` stays false. No schema
-history table or baseline is created automatically.
-
-Before enabling migrations in a later phase:
-
-1. Back up the existing database and compare its schema with the reviewed
-   reference snapshot.
-2. Explicitly baseline that existing schema at version **1** using Flyway's
-   baseline operation with deployment-provided credentials. This records the
-   baseline without recreating application tables.
-3. Add future changes as `V2__description.sql`, `V3__description.sql`, and so on
-   under `src/main/resources/db/migration/`, then enable Flyway and validate the
-   history before migration.
-4. Keep `ddl-auto=validate`. Provisioning a new empty database needs a separately
-   reviewed initial-schema process; do not apply a table-creating V1 migration to
-   the existing database.
-
-The recommended next work is the pending **Phase 2 — API Foundation**, before
-starting **Phase 4 — Authentication API**. No later phase starts automatically.
+The user-provided pre-Phase-25 baseline is **188 tests, 0 failures, 0 errors, 14
+skipped**. Current compile/test, production startup, health, Swagger/origin checks,
+and Docker verification evidence is recorded in
+[`BACKEND_TASK.md`](BACKEND_TASK.md). Do not infer a successful deployment merely
+from the example commands in this README.

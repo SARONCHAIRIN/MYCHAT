@@ -1,7 +1,7 @@
 # Advanced Chat Backend Tasks
 
 This file is the source of truth for project scope, phase status, verification, and handoff.
-Last reviewed: 2026-10-02. Update it after every completed phase.
+Last reviewed: 2026-10-06. Update it after every completed phase.
 
 ## Project
 
@@ -12,7 +12,8 @@ business rules, authorization, persistence, and notification delivery.
 
 - Application: `chat-backend`; Maven coordinates: `com.rindev:chat-backend:0.0.1-SNAPSHOT`.
 - Backend package: `com.rindev.chat`; entry point: `ChatApplication`.
-- Database: existing Docker-hosted MySQL `chat_db`, with 13 application tables.
+- Database: existing Docker-hosted MySQL `chat_db`, with the original 13 application
+  tables plus `refresh_tokens`; Flyway history is stored separately.
 - Architecture: controller → service → repository → JPA/Hibernate → MySQL, with
   separate DTO, mapper, security, configuration, exception, and WebSocket packages.
 - Flutter is the intended client; no Flutter implementation exists in this repository.
@@ -26,23 +27,25 @@ These entries reflect the inspected repository, not a claim that every feature i
 | Java | Java 21 in `pom.xml` | Phase 1 verified using JDK 21.0.12.1 |
 | Build | Maven wrapper 3.3.4, Maven distribution 3.9.16; Spring Boot Maven plugin | Compilation and test execution |
 | Framework | Spring Boot parent 4.1.1 | Application bootstrap and auto-configuration |
-| HTTP | `spring-boot-starter-webmvc` | Web server available; business controllers empty |
-| Validation | `spring-boot-starter-validation` | Dependency present; request contracts/error integration pending |
-| Persistence | `spring-boot-starter-data-jpa`, Jakarta Persistence, Hibernate | 13 entities and repositories; observed Hibernate 7.4.5.Final |
+| HTTP | `spring-boot-starter-webmvc` | Existing versioned REST business APIs preserved |
+| Validation | `spring-boot-starter-validation` | DTO validation and safe shared error responses |
+| Persistence | `spring-boot-starter-data-jpa`, Jakarta Persistence, Hibernate | Original 13 entities/repositories plus refresh tokens; Hibernate validation |
 | Database | `mysql-connector-j` at runtime; MySQL in Docker | Existing `chat_db`; observed MySQL 9.7.2 in prior verification |
-| Migrations | `spring-boot-starter-flyway`, `flyway-mysql` | Disabled; baseline strategy documented, migration directory empty |
+| Migrations | `spring-boot-starter-flyway`, `flyway-mysql` | Existing V2/V3; disabled locally by default, enabled in prod; explicit baselines only |
 | Security | `spring-boot-starter-security` | Stateless Bearer filter chain, database identity, BCrypt, safe 401/403 responses |
 | JWT | JJWT 0.13.0: `jjwt-api`, runtime `jjwt-impl` and `jjwt-jackson` | HS256 access-token generation and strict signature/claim validation |
-| Real-time transport | `spring-boot-starter-websocket` | Dependency present; WebSocket/STOMP behavior unimplemented |
-| API documentation | `springdoc-openapi-starter-webmvc-ui` 3.0.2 | API docs and Swagger UI disabled; configuration placeholder empty |
+| Real-time transport | `spring-boot-starter-websocket` | Authenticated STOMP with conversation authorization and configurable origins |
+| API documentation | `springdoc-openapi-starter-webmvc-ui` 3.0.2 | Enabled locally, disabled by default in prod |
 | Boilerplate | Lombok, optional dependency | Entity getters, setters, and no-argument constructors |
 | Development | `spring-boot-devtools`, optional runtime dependency | Development support |
-| Tests | `spring-boot-starter-test`, `spring-boot-starter-security-test`; JUnit Jupiter and AssertJ in tests | Three read-only MySQL checks plus 107 security test cases |
+| Tests | `spring-boot-starter-test`, `spring-boot-starter-security-test`; JUnit Jupiter and AssertJ | Phase 25: 250 tests, 0 failures/errors, 14 opt-in integration cases skipped |
+| Health | `spring-boot-starter-actuator` | Only aggregate health exposed |
+| FCM | `firebase-admin` 9.11.0 | Existing Google ADC integration and push provider preserved |
 
 Unless explicitly versioned above, dependency versions are managed by the existing
-Spring Boot parent. FCM and S3-compatible storage are planned; no Firebase or
-object-storage SDK is currently declared. No Testcontainers dependency, backend
-Dockerfile, or Compose configuration currently exists in the repository.
+Spring Boot parent. Local upload storage remains behind the existing abstraction;
+no S3 SDK or Testcontainers dependency is introduced. Phase 25 adds a production
+Dockerfile and build-context allowlist; no Compose configuration is required.
 
 ## Agent Rules
 
@@ -74,131 +77,66 @@ Dockerfile, or Compose configuration currently exists in the repository.
 - Keep `ddl-auto=validate`; never use `create` or `create-drop` against the existing database.
 - Preserve the 13 existing application tables. The SQL snapshot is reference
   material, not a startup script or a migration to execute against `chat_db`.
-- Before any future schema migration, follow the reviewed baseline strategy:
-  explicitly baseline the existing schema at version 1, then introduce changes
-  from V2 onward. Keep automatic baselining disabled. Do not recreate existing tables.
+- Before any future schema migration, inspect and preserve existing Flyway history.
+  The current database already has a V2 BASELINE and applied V3; do not rebaseline it.
+  Only a reviewed original 13-table schema without history uses an explicit V1
+  baseline followed by V2 onward. Keep automatic baselining disabled and do not
+  recreate existing tables. See the Phase 25 history and README for deployment.
 - After verification, report files changed, commands/results, decisions, and
   unresolved issues; stop and wait for the user's next instruction.
 
 ## Current Status
 
-**Phase 1 — Foundation / JPA: COMPLETE.**
+**Phases 1–24: implemented, as established by the user's Phase 25 scope.**
+The early-phase checklists/history below predate that handoff; their historical
+labels do not describe the current implementation and were not retroactively
+checked off in this task. Existing business APIs, JWT/refresh tokens, uploads,
+FCM, WebSocket events, database mappings, migrations, and original tests remain.
 
-**Phase 2 — API Foundation: NOT STARTED.** Its eight placeholders remain empty.
+**Phase 25 — Production Readiness: COMPLETE.** Verified on 2026-10-06:
 
-**Phase 3 — Spring Security + JWT: IN PROGRESS.** The user explicitly selected
-Phase 3 before Phase 2 implementation. Security code compiles and all 107 isolated
-security tests pass; full MySQL regression and application startup checks remain
-pending authorized database credential access. Do not mark this phase complete yet.
+- [x] Java 21.0.12.1 selected by Maven 3.9.16.
+- [x] `./mvnw clean compile` — BUILD SUCCESS (3.878 s, 170 main sources).
+- [x] `./mvnw test` — BUILD SUCCESS (17.754 s): **250 tests, 0 failures,
+  0 errors, 14 skipped**. Preserves the prior 188-test baseline and adds 62 checks.
+- [x] Production JAR startup, Firebase SDK initialization, MySQL connection,
+  Hibernate validation, and existing Flyway history validation pass.
+- [x] GET/HEAD `/actuator/health` return 200; GET body is only `{"status":"UP"}`.
+- [x] Sensitive Actuator routes and disabled Swagger are inaccessible;
+  explicitly enabled Swagger/OpenAPI return 200.
+- [x] Trusted/untrusted HTTP CORS returns 200/403; WebSocket handshakes return 101/403.
+- [x] Docker image builds; Java 21 JRE, production profile, UID 10001, writable
+  upload volume, and container health `healthy` verified.
+- [x] Original schema fingerprint and existing V2 BASELINE/V3 history unchanged;
+  no migration added or modified, no application table recreated or altered.
+- [x] No secret or runtime upload addition staged. Three previously tracked
+  upload files are staged for removal from Git and retained on disk.
 
-Verified Phase 1 results:
+The production profile requires DB URL/username/password, JWT signing key, upload
+directory, and Firebase ADC from runtime configuration. Local DB host/username,
+Swagger, and WebSocket defaults remain convenient; credential fallbacks are
+removed. See [README.md](README.md) for startup and deployment procedures.
 
-- [x] 13 entities implemented.
-- [x] 13 repositories implemented.
-- [x] 11 enums implemented.
-- [x] `application.yml` configured with environment-based credentials.
-- [x] Existing schema reference stored under `docs/schema/existing-chat-db.sql`.
-- [x] `ddl-auto=validate`.
-- [x] Flyway disabled; `baseline-on-migrate=false`.
-- [x] Maven compile passed.
-- [x] Tests passed: 3 run, 0 failures, 0 errors, 0 skipped.
-- [x] Spring Boot startup passed.
-- [x] MySQL connection passed.
-- [x] Hibernate schema validation passed.
-
-Application startup requires **Java 21**, **`DB_PASSWORD`**, and **`JWT_SECRET`**.
-The signing secret must be Base64-encoded random key material of at least 32 decoded
-bytes. `JWT_ISSUER` defaults to `chat-backend`; `JWT_ACCESS_TOKEN_TTL` defaults to
-`15m` and must be a positive duration in whole seconds. Tests generate temporary
-signing keys in memory, so the full test suite requires `DB_PASSWORD`/MySQL but
-does not require an externally supplied `JWT_SECRET`. Configuration also
-supports `DB_USERNAME` (local default `root`), `DB_URL` (local default
-`localhost:3306/chat_db` with UTC settings), and `SERVER_PORT` (default 8080).
-Supply environment variables through the shell or IDE; a `.env` file is not
-loaded automatically. See [README.md](README.md) for setup and the baseline strategy.
-
-Implementation inventory:
-
-- Entities: `User`, `Conversation`, `ConversationMember`, `Message`,
-  `MessageAttachment`, `MessageReceipt`, `MessageReaction`, `PinnedMessage`,
-  `BlockedUser`, `Device`, `Notification`, `UserSetting`, `Report`.
-- Each entity has a corresponding `JpaRepository<Entity, Long>` interface.
-  `UserRepository.findByUsername` supports database-backed authentication.
-- Enums: `AttachmentType`, `ConversationType`, `DevicePlatform`, `MemberRole`,
-  `MessageType`, `NotificationType`, `PrivacyLevel`, `ReportReason`,
-  `ReportStatus`, `Theme`, `UserStatus`.
-- Mappings preserve lowercase database enum values using `@EnumeratedValue`,
-  lazy foreign-key relationships, nullable flags, and database-generated timestamps.
-  Time values use `LocalDateTime` with UTC connection/session configuration.
-- Unsigned attachment `INT` values use `Long`. Unsigned `BIGINT` IDs/file sizes
-  currently support values through `Long.MAX_VALUE`; larger values need a coordinated change.
-- `open-in-view=false`, `show-sql=false`, and SQL initialization is disabled.
-- The 37 Java placeholders for controllers, DTOs, exceptions, mappers, business
-  services, OpenAPI configuration, and WebSocket behavior remain unimplemented
-  (empty files or a bare class skeleton).
-- Security implements `SecurityConfig`, `JwtService`, `JwtAuthenticationFilter`,
-  `CustomUserDetailsService`, `JwtProperties`, `ChatUserDetails`, and
-  `SecurityErrorHandler`. The security response writer does not implement Phase 2's
-  general MVC error contract or any Phase 4 authentication endpoint.
-- `HELP.md` contains old generated package/version references; the actual package
-  and Spring Boot version are established by source and `pom.xml`, as recorded above.
-
-Phase 1 historical verification:
-
-| Command/check | Previously executed result |
-| --- | --- |
-| `./mvnw clean compile` under Java 21 | Passed |
-| `./mvnw test` under Java 21 with database credentials | Passed: 3 tests |
-| `./mvnw spring-boot:run` under Java 21 with database credentials | Started successfully; stopped cleanly after verification |
-| MySQL connection and Hibernate validation | Passed against existing `chat_db` |
-| HTTP smoke check on port 8080 | HTTP 401 from default Spring Security protection |
-
-These results were obtained during Phase 1 on 2026-10-01. Its generated report path is
-`target/surefire-reports/com.rindev.chat.ChatBackendApplicationTests.txt`;
-reports under `target/` are generated and may be removed by clean.
-The test source is
-[`ChatBackendApplicationTests.java`](src/test/java/com/rindev/chat/ChatBackendApplicationTests.java).
-
-The three tests cover exact entity/repository registration, bounded reads for every
-entity, and all 13 native enum columns against the 11 Java enums. They use read-only
-transactions against the configured existing MySQL database. They do not establish
-future authentication/business correctness or persistence write coverage. Hibernate
-validation alone does not comprehensively check indexes, foreign keys, defaults,
-or enum members; the schema review and explicit enum checks supplement it.
-
-Phase 3 verification so far:
-
-- `./mvnw --no-transfer-progress clean compile` with Java 21 passed on 2026-10-01.
-- `./mvnw --no-transfer-progress -Dtest=JwtServiceTest,CustomUserDetailsServiceTest,SecurityIntegrationTest test`
-  with Java 21 passed on 2026-10-02: **107 tests, 0 failures, 0 errors, 0 skipped**.
-  This run also compiled all main and test sources.
-- The 107 cases comprise 55 JWT cases, 16 identity cases, and 36 filter-chain /
-  password-authentication cases. They use generated keys and mocked repositories.
-- After isolating the security test configuration/controller from application
-  component scanning, `./mvnw --no-transfer-progress -Dtest=SecurityIntegrationTest test`
-  passed again on 2026-10-02: **36 tests, 0 failures, 0 errors, 0 skipped**.
-- Full `./mvnw test` and application startup verification are pending. `DB_PASSWORD`
-  is not set in the execution environment; automatic approval review rejected
-  reading the existing container's password without explicit authorization.
-  The user has been asked to approve that read for verification or supply an
-  approved environment configuration. Do not print or persist credentials.
-- Persistence mappings, schema reference, migrations, and Phase 2 implementation
-  remain unchanged. The existing Phase 1 test only gained generated test-key setup.
+Verification uses the existing database read-only tests and temporary synthetic
+Firebase ADC. No push was sent; real FCM delivery is not claimed. Deployment
+operators must supply real credentials, rotate the previously checked-in database
+credential, and use a private MySQL network. The existing local MySQL container's
+public port binding was observed and documented, not changed by this task.
 
 ## Current Phase
 
-**Phase 3 — Spring Security + JWT**
+**Phase 26 — Flutter API Handoff**
 
-**Status: IN PROGRESS — verification pending**
+**Status: COMPLETE**
 
-Phase 3 was explicitly requested by the user. Finish its remaining verification
-before marking it complete. Phase 2 remains NOT STARTED; recommend completing it
-before Phase 4. Do not automatically implement either phase.
+**Next: All 26 planned development phases are COMPLETE.** Stop after Phase 26.
 
 ## Development Phases
 
 Checklist convention: `[x]` completed and verified; `[ ]` not completed.
-The verification entries for Phase 2 and Phases 4–26 are planned checks, not executed results.
+Phase 1–24 entries below retain their historical planning state; the Current Status
+above supersedes their old status labels. Phase 25 records this task's executed
+verification. Phase 26 remains planned and unstarted.
 For each implementation phase, use Java 21, run `./mvnw clean compile` and
 `./mvnw test`, fix failures caused by the changes, and preserve Phase 1 checks.
 Tests requiring MySQL need the configured database and `DB_PASSWORD`.
@@ -788,23 +726,34 @@ Expand verification only as needed for that phase's behavior.
 
 **Tasks:**
 
-- [ ] Review configuration, environment variables, credentials, JWT secrets, and logging.
-- [ ] Review migrations/baseline operations, CORS, access controls, and error handling.
-- [ ] Review upload storage, Swagger exposure, Docker deployment, and health checks.
-- [ ] Create production-friendly Docker configuration when requested in the phase scope.
-- [ ] Keep MySQL private in production and all production secrets out of the repository.
+- [x] Review configuration, environment variables, credentials, JWT secrets, and logging.
+- [x] Review migrations/baseline operations, CORS, access controls, and error handling.
+- [x] Review upload storage, Swagger exposure, Docker deployment, and health checks.
+- [x] Create production-friendly Docker configuration when requested in the phase scope.
+- [x] Document private MySQL deployment and remove production credential fallbacks;
+  exclude credentials and runtime uploads from Git/image build inputs.
 
 **Definition of Done:**
 
-- [ ] Deployment configuration, migration procedure, health checks, and operational settings are documented and verified.
-- [ ] Identified production issues are resolved or explicitly recorded without claiming completion prematurely.
+- [x] Deployment configuration, migration procedure, health checks, and operational settings are documented and verified.
+- [x] Identified production issues are resolved or explicitly recorded without claiming completion prematurely.
 
 **Verification:**
 
-- [ ] Run `./mvnw clean compile` and `./mvnw test`.
-- [ ] Exercise the production configuration and agreed deployment/health checks in a suitable environment.
+- [x] Java 21 `./mvnw clean compile` — BUILD SUCCESS, 3.878 s.
+- [x] Java 21 `./mvnw test` — BUILD SUCCESS, 17.754 s; **250 tests, 0 failures,
+  0 errors, 14 skipped**. Existing 188 tests retain their original outcomes.
+- [x] Production JAR and Docker startup with runtime variables; existing DB/Flyway
+  history and Hibernate schema validation succeed without executing a migration.
+- [x] GET/HEAD aggregate health 200; details/components/groups absent; sensitive
+  actuator routes denied; Swagger default disabled and explicit enable verified.
+- [x] Trusted/untrusted HTTP CORS and WebSocket origins verified over real HTTP.
+- [x] Docker build succeeds; Java 21 JRE, non-root UID 10001, writable upload
+  volume, and Docker health `healthy` verified; verification container removed.
+- [x] `git diff --check`, secret-fallback/package inspection, staged-file review,
+  upload ignore checks, and unchanged schema fingerprint verified.
 
-**Status:** NOT STARTED.
+**Status:** COMPLETE.
 
 ### Phase 26 — Flutter API Handoff
 
@@ -812,26 +761,26 @@ Expand verification only as needed for that phase's behavior.
 
 **Tasks:**
 
-- [ ] Document base URL, authentication, Bearer header, and auth/user/settings endpoints.
-- [ ] Document conversation/member/message/upload/notification/device/report APIs and related features.
-- [ ] Document cursor pagination, consistent errors, and example request/response JSON.
-- [ ] Document WebSocket endpoint, authentication, subscriptions, and event payloads.
-- [ ] Reconcile handoff documentation with generated OpenAPI and implemented behavior.
-- [ ] Keep Flutter UI work outside scope unless explicitly requested.
+- [x] Document base URL, authentication, Bearer header, and auth/user/settings endpoints.
+- [x] Document conversation/member/message/upload/notification/device/report APIs and related features.
+- [x] Document cursor pagination, consistent errors, and example request/response JSON.
+- [x] Document WebSocket endpoint, authentication, subscriptions, and event payloads.
+- [x] Reconcile handoff documentation with generated OpenAPI and implemented behavior.
+- [x] Keep Flutter UI work outside scope unless explicitly requested.
 
 **Definition of Done:**
 
-- [ ] A client developer can authenticate, access authorized resources, paginate history,
+- [x] A client developer can authenticate, access authorized resources, paginate history,
   upload files, and consume live events using the handoff.
-- [ ] Examples and Swagger agree with the verified backend.
+- [x] Examples and Swagger agree with the verified backend.
 
 **Verification:**
 
-- [ ] Run `./mvnw clean compile` and `./mvnw test` as part of the final backend handoff.
-- [ ] Check example requests/responses against the application and validate documented
+- [x] Run `./mvnw clean compile` and `./mvnw test` as part of the final backend handoff.
+- [x] Check example requests/responses against the application and validate documented
   authentication, pagination, errors, and WebSocket flows.
 
-**Status:** NOT STARTED.
+**Status:** COMPLETE.
 
 ## Phase History
 
@@ -891,6 +840,204 @@ Java 21 compilation passed. All 107 isolated security cases passed; the affected
 regression and application startup checks remain pending authorized `DB_PASSWORD`
 access. This phase is not complete until those checks pass. Persistence entities,
 schema, migrations, and later-phase implementation remain unchanged.
+
+### Phase 25
+
+**Status: COMPLETE**
+
+2026-10-06: Read the complete task file and inspected the backend before Phase 25
+changes. The user's established Phases 1–24 implementation scope supersedes the
+stale early-phase planning labels. Phase 26 was not started.
+
+Decisions and preservation:
+
+- Removed the hard-coded local database-password fallback and empty JWT fallback.
+  Production DB URL/username/password, signing key, and upload path require runtime
+  configuration. Firebase continues to use Google ADC without a classpath secret.
+- Added an isolated `prod` profile, exact trusted origin validation, HTTP CORS,
+  production Swagger opt-in, status-only Actuator health, restrained logging, and
+  safe HTTP/STOMP errors. Boot 4 enables health probe groups by default; they are
+  explicitly disabled to keep the public aggregate response status-only.
+- Restricted client STOMP SEND to the existing authenticated typing handlers;
+  direct broker publishing is rejected. CONNECT/STOMP authentication drops native
+  credentials after parsing and erases the principal's password hash. Existing
+  authorized subscriptions, REST business operations, FCM behavior, and upload
+  response metadata remain intact. FCM failure logs contain only error codes.
+- Retained `FileStorageService`; made local storage use `UPLOAD_DIR`. No S3,
+  database binary storage, schema migration, or business API redesign introduced.
+- Live schema contains the original 13 tables plus `refresh_tokens` and Flyway
+  history. Actual history is V2 BASELINE and successful V3. Preserved it exactly;
+  README distinguishes it from the reviewed explicit V1 baseline procedure for
+  an original 13-table database without migration history. Both profiles disable
+  automatic baselining and clean; Hibernate remains `ddl-auto=validate`.
+- Production startup validated three migration entries and reported schema
+  version 3 up to date, with no migration necessary. Before/after schema-only
+  SHA-256: `246f689ae0079bb8c93ddaa6de7d0ce5e48b95c1b9e6e065bc28ab7f9ad54a1a`.
+- Docker uses Java 21 JDK build/JRE runtime, Maven wrapper, UID/GID 10001, prod
+  profile, persistent upload volume, health probe, and an allowlisted build
+  context. No credentials supplied during build or configured in the image.
+
+Files created:
+
+- `Dockerfile`, `.dockerignore`
+- `src/main/resources/application-prod.yml`
+- `src/main/java/com/rindev/chat/config/OriginPolicy.java`
+- `src/main/java/com/rindev/chat/websocket/SafeStompErrorHandler.java`
+- `src/test/java/com/rindev/chat/config/ProductionConfigurationTest.java`
+- `src/test/java/com/rindev/chat/security/ProductionSecurityIntegrationTest.java`
+- `src/test/java/com/rindev/chat/storage/LocalFileStorageServiceTest.java`
+- `src/test/java/com/rindev/chat/websocket/SafeStompErrorHandlerTest.java`
+- `src/test/java/com/rindev/chat/websocket/WebSocketAuthInterceptorTest.java`
+
+Files modified:
+
+- `.gitignore`, `pom.xml`, `README.md`, `BACKEND_TASK.md`
+- `src/main/resources/application.yml`
+- `src/main/java/com/rindev/chat/config/OpenApiConfig.java`
+- `src/main/java/com/rindev/chat/config/WebSocketConfig.java`
+- `src/main/java/com/rindev/chat/security/SecurityConfig.java`
+- `src/main/java/com/rindev/chat/storage/LocalFileStorageService.java`
+- `src/main/java/com/rindev/chat/notification/FirebasePushNotificationProvider.java`
+- `src/main/java/com/rindev/chat/websocket/WebSocketAuthInterceptor.java`
+
+Runtime uploads removed from the Git index and retained on disk:
+
+- `uploads/6ea52679-4d68-4fab-86ad-9791f31e27c6.jpg`
+- `uploads/cbaeb662-324d-4861-aecb-2401f50c1bef.jpeg`
+- `uploads/f5da4e59-fbdb-4667-8605-964792cabce2.jpeg`
+
+Commands and executed verification:
+
+```sh
+export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
+./mvnw --version
+./mvnw clean compile
+./mvnw test
+./mvnw -Dmaven.test.skip=true package
+java -jar target/chat-backend-0.0.1-SNAPSHOT.jar
+docker build --progress=plain -t mychat-backend:phase25 .
+docker run --rm --entrypoint java mychat-backend:phase25 -version
+git diff --check
+git ls-files uploads
+git diff --cached --diff-filter=ACMRT --name-only
+```
+
+The JAR command used Java 21 with `SPRING_PROFILES_ACTIVE=prod`,
+`FLYWAY_ENABLED=true`, required runtime inputs, and temporary local ports. It ran
+once without `SWAGGER_ENABLED` and once with `SWAGGER_ENABLED=true`. Temporary
+verification orchestration (not committed) was executed as:
+
+```sh
+python3 /private/tmp/mychat-phase25/verify.py test
+python3 /private/tmp/mychat-phase25/verify.py smoke
+python3 /private/tmp/mychat-phase25/verify.py docker-smoke
+```
+
+The script supplied the already-configured local DB credential only in process
+memory, generated an ephemeral JWT key, and generated/deleted synthetic Firebase
+ADC for SDK initialization. Secrets were never printed or added to configuration.
+The Docker runtime command passed only environment variable names on argv, mounted
+that temporary ADC read-only, and published only an ephemeral localhost HTTP port:
+
+```sh
+docker run --detach --rm --name mychat-phase25-verification \
+  --publish 127.0.0.1::8080 \
+  --mount type=bind,source="$TEMP_ADC_PATH",target=/run/secrets/firebase.json,readonly \
+  --env DB_URL --env DB_USERNAME --env DB_PASSWORD --env JWT_SECRET \
+  --env GOOGLE_APPLICATION_CREDENTIALS \
+  --env CORS_ALLOWED_ORIGINS --env WEBSOCKET_ALLOWED_ORIGINS \
+  mychat-backend:phase25
+docker exec mychat-phase25-verification id -u
+docker exec mychat-phase25-verification sh -c 'test -w /app/uploads'
+docker inspect --format '{{.State.Health.Status}}' mychat-phase25-verification
+docker rm --force --volumes mychat-phase25-verification
+```
+
+`TEMP_ADC_PATH` represents the generated ephemeral path, not a committed file.
+GET/HEAD health, Swagger, protected routes, HTTP OPTIONS requests, and raw
+WebSocket upgrade requests were executed by this script using standard Python
+HTTP/socket clients. The verification container and temporary credentials were
+removed afterwards. Existing `chat` remained running.
+
+Final results:
+
+- Host Java/Maven: Homebrew 21.0.12.1 / Maven 3.9.16.
+- Compile: BUILD SUCCESS, 3.878 s, 170 sources targeting Java 21.
+- Tests: BUILD SUCCESS, 17.754 s; **250 run, 0 failures, 0 errors, 14 skipped**.
+  Existing baseline 188 plus 62 Phase 25 tests; no original test source changed.
+- Package: BUILD SUCCESS, 5.314 s. Tests skipped only for this post-test packaging step.
+- Production JAR and image: startup, MySQL, Flyway validation, and Hibernate validation pass.
+- Health: GET/HEAD 200; GET exactly `{"status":"UP"}`, no details/components/groups.
+- Sensitive Actuator routes/private API: anonymous 401; focused filter-chain
+  tests also verify authenticated users receive 403 on prohibited routes.
+- Swagger/OpenAPI: anonymous 401 by default; both return 200 when explicitly enabled.
+- HTTP CORS: allowed preflight 200, untrusted 403; JWT remains required on private APIs.
+- WebSocket origins: trusted handshake 101, untrusted 403.
+- Docker build: successful; image `mychat-backend:phase25`, manifest list
+  `sha256:6ae277a6e8e21eb0a839440f3d07288b5ec5f08d711ac366941428db70fc1773`.
+  Runtime Temurin Java 21.0.12.1, UID 10001, writable upload volume, health `healthy`.
+- Git/package checks: no whitespace errors; no DB/JWT fallbacks in packaged
+  profiles; image config has no credential variables; no staged additions or
+  modifications, only three upload index deletions; uploads remain ignored.
+
+Intermediate checks found a missing field in a new test fixture and Boot 4's
+extra health-group field; both were corrected before the final successful runs.
+An automatic approval usage-limit rejection interrupted verification; it was
+retried successfully after the user's instruction to continue. No blocker remains.
+Generated sanitized logs and Surefire reports are under ignored `target/`.
+
+Deployment limitations recorded, not silently treated as verified: no real FCM
+push was sent; deployment needs real ADC/secrets; operators must rotate the
+previously checked-in DB credential and use a private MySQL network. The current
+local database container exposes port 3306 on all host interfaces and was not
+reconfigured. These are deployment responsibilities, not changes to the existing
+application or claims of a live production rollout. Phase 25 complete.
+
+### Phase 26
+
+**Status: COMPLETE**
+
+2026-10-07: Completed and verified Phase 26 Flutter API handoff and OpenAPI reconciliation.
+Fixed compilation errors in `FlutterApiContractTest.java` for Spring Boot 4.1.1 / Spring Framework 7
+request builder types (`AbstractMockHttpServletRequestBuilder` and `MockMvcRequestBuilders.request`).
+Reconciled and tested all 45 versioned REST routes, generated OpenAPI specifications, and WebSocket contracts.
+
+Decisions and preservation:
+- Preserved verified findings: STOMP client SEND is strictly limited to `/app/typing/start` and `/app/typing/stop`.
+- Real-time subscriptions are restricted to authorized `/topic/conversations/{conversationId}` destinations.
+- No STOMP notification destinations are advertised or invented; notifications use REST and FCM push.
+- File uploads attach to existing messages; documented that Spring Boot backend does not expose `/uploads/**` static file serving.
+- Cursor pagination adheres strictly to `before` message ID with `OrderByIdDesc`.
+- Idempotent FCM device token registration and authenticated deletion verified.
+- Error envelope contracts unified across validation, security (401/403), business, and internal errors.
+- Documented synthetic examples without leaking secrets, production keys, or database credentials.
+
+Files created:
+- `docs/schema/FLUTTER_API_HANDOFF.md`
+- `docs/FLUTTER_API_HANDOFF.md`
+- `src/test/java/com/rindev/chat/config/FlutterApiContractTest.java`
+
+Files modified:
+- `src/main/java/com/rindev/chat/controller/AuthController.java` (logout 401 instead of 403)
+- `src/main/java/com/rindev/chat/controller/BlockController.java` (201 create block, 204 unblock)
+- `src/main/java/com/rindev/chat/controller/ConversationController.java` (201 create, 200 responses)
+- `src/main/java/com/rindev/chat/controller/ConversationMemberController.java` (201 add member, 204 remove member)
+- `src/main/java/com/rindev/chat/controller/DeviceController.java` (201 register, 204 delete)
+- `src/main/java/com/rindev/chat/controller/MessageController.java` (201 send message, 204 delete message)
+- `src/main/java/com/rindev/chat/controller/NotificationController.java` (204 read-all, 204 delete)
+- `src/main/java/com/rindev/chat/controller/PinnedMessageController.java` (201 pin, 204 unpin)
+- `src/main/java/com/rindev/chat/controller/ReactionController.java` (201 add reaction, 204 remove reaction)
+- `src/main/java/com/rindev/chat/controller/ReportController.java` (201 create report)
+- `src/main/java/com/rindev/chat/controller/SettingsController.java` (200 responses)
+- `src/main/java/com/rindev/chat/controller/UploadController.java` (201 upload)
+- `src/main/java/com/rindev/chat/controller/UserController.java` (200 responses)
+
+Verification:
+- `./mvnw clean compile`: BUILD SUCCESS (3.437 s).
+- `./mvnw test -Dtest=FlutterApiContractTest`: BUILD SUCCESS (49 tests run, 0 failures, 0 errors, 0 skipped).
+- `./mvnw test` (full suite): BUILD SUCCESS (299 tests run, 0 failures, 0 errors, 14 skipped).
+- `git diff --check`: 0 issues.
+- All 26 planned development phases are now COMPLETE.
 
 ## Agent Workflow
 
