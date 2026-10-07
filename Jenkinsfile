@@ -7,13 +7,16 @@ pipeline {
     }
 
     environment {
-    JAVA_HOME = '/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home'
-    PATH = "${JAVA_HOME}/bin:${env.PATH}"
+        JAVA_HOME = '/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home'
+        PATH = "${JAVA_HOME}/bin:${env.PATH}"
 
-    DB_URL = credentials('mychat-db-url')
-    DB_USERNAME = credentials('mychat-db-username')
-    DB_PASSWORD = credentials('mychat-db-password')
-}
+        DB_URL = credentials('mychat-db-url')
+        DB_USERNAME = credentials('mychat-db-username')
+        DB_PASSWORD = credentials('mychat-db-password')
+
+        GOOGLE_APPLICATION_CREDENTIALS =
+            credentials('mychat-firebase-service-account')
+    }
 
     stages {
         stage('Checkout') {
@@ -25,11 +28,35 @@ pipeline {
         stage('Environment') {
             steps {
                 sh '''
-                    echo "=== Java ==="
                     java -version
-
-                    echo "=== Maven ==="
                     ./mvnw --version
+
+                    test -n "$DB_URL" || {
+                        echo "DB_URL missing"
+                        exit 1
+                    }
+
+                    test -n "$DB_USERNAME" || {
+                        echo "DB_USERNAME missing"
+                        exit 1
+                    }
+
+                    test -n "$DB_PASSWORD" || {
+                        echo "DB_PASSWORD missing"
+                        exit 1
+                    }
+
+                    test -n "$GOOGLE_APPLICATION_CREDENTIALS" || {
+                        echo "Firebase credentials missing"
+                        exit 1
+                    }
+
+                    test -f "$GOOGLE_APPLICATION_CREDENTIALS" || {
+                        echo "Firebase credential file not found"
+                        exit 1
+                    }
+
+                    echo "MYCHAT CI environment configured."
                 '''
             }
         }
