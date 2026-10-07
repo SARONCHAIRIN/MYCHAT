@@ -7,9 +7,13 @@ pipeline {
     }
 
     environment {
-        JAVA_HOME = '/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home'
-        PATH = "${JAVA_HOME}/bin:${env.PATH}"
-    }
+    JAVA_HOME = '/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home'
+    PATH = "${JAVA_HOME}/bin:${env.PATH}"
+
+    DB_URL = credentials('mychat-db-url')
+    DB_USERNAME = credentials('mychat-db-username')
+    DB_PASSWORD = credentials('mychat-db-password')
+}
 
     stages {
         stage('Checkout') {
