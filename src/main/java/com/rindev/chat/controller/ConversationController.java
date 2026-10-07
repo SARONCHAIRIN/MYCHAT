@@ -44,6 +44,7 @@ public class ConversationController {
 
     @PostMapping
     @Operation(summary = "Create a conversation")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Resource created")
     public ResponseEntity<ApiResponse<ConversationResponse>> createConversation(
             @AuthenticationPrincipal ChatUserDetails principal,
 
@@ -61,6 +62,7 @@ public class ConversationController {
 
     @GetMapping
     @Operation(summary = "List your conversations")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request successful")
     public ResponseEntity<ApiResponse<List<ConversationResponse>>> getConversations(
             @AuthenticationPrincipal ChatUserDetails principal) {
 
@@ -73,6 +75,7 @@ public class ConversationController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get a conversation")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request successful")
     public ResponseEntity<ApiResponse<ConversationResponse>> getConversation(
             @AuthenticationPrincipal ChatUserDetails principal,
 
@@ -88,6 +91,7 @@ public class ConversationController {
 
     @PatchMapping("/{id}")
     @Operation(summary = "Update a group conversation")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request successful")
     public ResponseEntity<ApiResponse<ConversationResponse>> updateConversation(
             @AuthenticationPrincipal ChatUserDetails principal,
 

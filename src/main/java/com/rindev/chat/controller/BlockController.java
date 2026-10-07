@@ -28,6 +28,7 @@ public class BlockController {
         }
 
         @PostMapping("/{id}/block")
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Resource created")
         public ResponseEntity<ApiResponse<BlockedUserResponse>> block(
                         @AuthenticationPrincipal ChatUserDetails principal,
                         @PathVariable Long id) {
@@ -41,6 +42,8 @@ public class BlockController {
         }
 
         @DeleteMapping("/{id}/block")
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "No content",
+                content = @io.swagger.v3.oas.annotations.media.Content)
         public ResponseEntity<Void> unblock(
                         @AuthenticationPrincipal ChatUserDetails principal,
                         @PathVariable Long id) {

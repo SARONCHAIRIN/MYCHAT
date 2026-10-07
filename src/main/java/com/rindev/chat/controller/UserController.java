@@ -43,6 +43,7 @@ public class UserController {
 
     @GetMapping
     @Operation(summary = "List users")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request successful")
     public ResponseEntity<ApiResponse<Page<UserPublicResponse>>> getUsers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -53,6 +54,7 @@ public class UserController {
 
     @GetMapping("/search")
     @Operation(summary = "Search users by name or username")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request successful")
     public ResponseEntity<ApiResponse<Page<UserPublicResponse>>> searchUsers(
             @RequestParam(name = "q") String query,
             @RequestParam(defaultValue = "0") int page,
@@ -64,6 +66,7 @@ public class UserController {
 
     @GetMapping("/me")
     @Operation(summary = "Get your profile")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request successful")
     public ResponseEntity<ApiResponse<UserResponse>> getMe(
             @AuthenticationPrincipal ChatUserDetails principal) {
         return ResponseEntity.ok(
@@ -73,6 +76,7 @@ public class UserController {
 
     @PatchMapping("/me")
     @Operation(summary = "Update your profile")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request successful")
     public ResponseEntity<ApiResponse<UserResponse>> updateMe(
             @AuthenticationPrincipal ChatUserDetails principal,
             @Valid @RequestBody UpdateUserRequest request) {
@@ -85,6 +89,7 @@ public class UserController {
 
     @PatchMapping("/me/avatar")
     @Operation(summary = "Update your avatar")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request successful")
     public ResponseEntity<ApiResponse<UserResponse>> updateAvatar(
             @AuthenticationPrincipal ChatUserDetails principal,
             @Valid @RequestBody UpdateAvatarRequest request) {
@@ -97,6 +102,7 @@ public class UserController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get a user's public profile")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request successful")
     public ResponseEntity<ApiResponse<UserPublicResponse>> getUserById(
             @PathVariable Long id) {
         return ResponseEntity.ok(

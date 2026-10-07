@@ -28,6 +28,7 @@ public class DeviceController {
     }
 
     @PostMapping
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Resource created")
     public ResponseEntity<ApiResponse<DeviceResponse>> register(
             @AuthenticationPrincipal ChatUserDetails principal,
             @Valid @RequestBody RegisterDeviceRequest request,
@@ -43,6 +44,8 @@ public class DeviceController {
     }
 
     @DeleteMapping("/{id}")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "No content",
+            content = @io.swagger.v3.oas.annotations.media.Content)
     public ResponseEntity<Void> delete(
             @AuthenticationPrincipal ChatUserDetails principal,
             @PathVariable Long id) {

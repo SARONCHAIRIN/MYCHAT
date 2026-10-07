@@ -38,6 +38,7 @@ public class SettingsController {
 
     @GetMapping
     @Operation(summary = "Get your settings")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request successful")
     public ResponseEntity<ApiResponse<UserSettingResponse>> getSettings(
             @AuthenticationPrincipal ChatUserDetails principal) {
         return ResponseEntity.ok(
@@ -48,6 +49,7 @@ public class SettingsController {
 
     @PatchMapping
     @Operation(summary = "Update your settings")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request successful")
     public ResponseEntity<ApiResponse<UserSettingResponse>> updateSettings(
             @AuthenticationPrincipal ChatUserDetails principal,
             @Valid @RequestBody UpdateSettingsRequest request) {

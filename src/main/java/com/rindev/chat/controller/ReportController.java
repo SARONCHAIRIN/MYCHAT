@@ -29,6 +29,7 @@ public class ReportController {
 
     @PostMapping
     @Operation(summary = "Submit an abuse report")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Resource created")
     public ResponseEntity<ApiResponse<ReportResponse>> create(
             @AuthenticationPrincipal ChatUserDetails principal,
             @Valid @RequestBody CreateReportRequest request) {

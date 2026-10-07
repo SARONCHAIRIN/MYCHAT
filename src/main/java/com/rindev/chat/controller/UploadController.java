@@ -29,6 +29,7 @@ public class UploadController {
 
         @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
         @Operation(summary = "Upload a message attachment")
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Resource created")
         public ResponseEntity<ApiResponse<UploadResponse>> upload(
                         @AuthenticationPrincipal ChatUserDetails principal,
                         @RequestParam Long messageId,

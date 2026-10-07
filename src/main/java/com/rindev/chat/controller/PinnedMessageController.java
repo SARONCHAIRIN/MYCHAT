@@ -26,6 +26,7 @@ public class PinnedMessageController {
         }
 
         @PostMapping("/{messageId}")
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Resource created")
         public ResponseEntity<ApiResponse<PinnedMessageResponse>> pin(
                         @AuthenticationPrincipal ChatUserDetails principal,
                         @PathVariable Long conversationId,
@@ -53,6 +54,8 @@ public class PinnedMessageController {
         }
 
         @DeleteMapping("/{messageId}")
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "No content",
+                content = @io.swagger.v3.oas.annotations.media.Content)
         public ResponseEntity<Void> unpin(
                         @AuthenticationPrincipal ChatUserDetails principal,
                         @PathVariable Long conversationId,

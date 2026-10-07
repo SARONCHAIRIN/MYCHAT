@@ -29,6 +29,7 @@ public class MessageController {
 
     @PostMapping("/api/v1/conversations/{conversationId}/messages")
     @Operation(summary = "Send a message")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Resource created")
     public ResponseEntity<ApiResponse<MessageResponse>> createMessage(
             @AuthenticationPrincipal ChatUserDetails principal,
             @PathVariable Long conversationId,
@@ -90,6 +91,8 @@ public class MessageController {
 
     @DeleteMapping("/api/v1/messages/{messageId}")
     @Operation(summary = "Soft delete your message")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "No content",
+            content = @io.swagger.v3.oas.annotations.media.Content)
     public ResponseEntity<Void> deleteMessage(
             @AuthenticationPrincipal ChatUserDetails principal,
             @PathVariable Long messageId) {

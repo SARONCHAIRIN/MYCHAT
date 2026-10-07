@@ -44,6 +44,7 @@ public class ConversationMemberController {
 
     @PostMapping
     @Operation(summary = "Add a member to a group")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Resource created")
     public ResponseEntity<ApiResponse<ConversationMemberResponse>> addMember(
             @AuthenticationPrincipal ChatUserDetails principal,
             @PathVariable Long conversationId,
@@ -61,6 +62,8 @@ public class ConversationMemberController {
 
     @DeleteMapping("/{userId}")
     @Operation(summary = "Remove a member from a group")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "No content",
+            content = @io.swagger.v3.oas.annotations.media.Content)
     public ResponseEntity<Void> removeMember(
             @AuthenticationPrincipal ChatUserDetails principal,
             @PathVariable Long conversationId,

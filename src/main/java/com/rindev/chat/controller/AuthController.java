@@ -80,7 +80,7 @@ public class AuthController {
             description = "Requires your access token and a refresh token owned by your account. Access JWTs remain valid until their expiry.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Refresh session revoked"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Refresh session belongs to another account",
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Invalid refresh token, including a token owned by another account",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     public ResponseEntity<ApiResponse<Void>> logout(@AuthenticationPrincipal ChatUserDetails principal,

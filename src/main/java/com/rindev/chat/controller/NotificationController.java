@@ -51,6 +51,8 @@ public class NotificationController {
         }
 
         @PostMapping("/read-all")
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "No content",
+                content = @io.swagger.v3.oas.annotations.media.Content)
         public ResponseEntity<Void> readAll(
                         @AuthenticationPrincipal ChatUserDetails principal) {
 
@@ -61,6 +63,8 @@ public class NotificationController {
         }
 
         @DeleteMapping("/{id}")
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "No content",
+                content = @io.swagger.v3.oas.annotations.media.Content)
         public ResponseEntity<Void> delete(
                         @AuthenticationPrincipal ChatUserDetails principal,
                         @PathVariable Long id) {

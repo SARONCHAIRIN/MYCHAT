@@ -28,6 +28,7 @@ public class ReactionController {
     }
 
     @PostMapping
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Resource created")
     public ResponseEntity<ApiResponse<ReactionResponse>> add(
             @AuthenticationPrincipal ChatUserDetails principal,
             @PathVariable Long messageId,
@@ -56,6 +57,8 @@ public class ReactionController {
     }
 
     @DeleteMapping("/{emoji}")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "No content",
+            content = @io.swagger.v3.oas.annotations.media.Content)
     public ResponseEntity<Void> remove(
             @AuthenticationPrincipal ChatUserDetails principal,
             @PathVariable Long messageId,
