@@ -9,4 +9,6 @@ public interface MessageAttachmentRepository
 
         List<MessageAttachment> findByMessageId(
                         Long messageId);
+
+        List<MessageAttachment> findByMessageIdIn(List<Long> messageIds);
 }

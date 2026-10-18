@@ -5,6 +5,7 @@ import com.rindev.chat.dto.request.UpdateUserRequest;
 import com.rindev.chat.dto.response.UserPublicResponse;
 import com.rindev.chat.dto.response.UserResponse;
 import org.springframework.data.domain.Page;
+import org.springframework.web.multipart.MultipartFile;
 
 public interface UserService {
 
@@ -22,6 +23,8 @@ public interface UserService {
     UserResponse updateMe(
             Long userId,
             UpdateUserRequest request);
+
+    UserResponse uploadAvatar(Long userId, MultipartFile file);
 
     UserResponse updateAvatar(
             Long userId,

@@ -19,6 +19,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -98,6 +103,16 @@ public class UserController {
                         userService.updateAvatar(
                                 principal.getId(),
                                 request)));
+    }
+
+    /** Upload a profile picture directly, without requiring an external URL. */
+    @PatchMapping(value = "/me/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload your avatar image (multipart file)")
+    public ResponseEntity<ApiResponse<UserResponse>> uploadAvatar(
+            @AuthenticationPrincipal ChatUserDetails principal,
+            @RequestPart("file") MultipartFile file) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                userService.uploadAvatar(principal.getId(), file)));
     }
 
     @GetMapping("/{id}")

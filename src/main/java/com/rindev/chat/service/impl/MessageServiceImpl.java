@@ -179,9 +179,7 @@ public class MessageServiceImpl implements MessageService {
                                 ? fetched.subList(0, limit)
                                 : fetched;
 
-                List<MessageResponse> responses = page.stream()
-                                .map(messageMapper::toResponse)
-                                .toList();
+                List<MessageResponse> responses = messageMapper.toResponses(page);
 
                 Long nextCursor = hasMore && !page.isEmpty()
                                 ? page.get(page.size() - 1).getId()

@@ -11,6 +11,10 @@ import com.rindev.chat.exception.ResourceNotFoundException;
 import com.rindev.chat.mapper.UserMapper;
 import com.rindev.chat.repository.UserRepository;
 import com.rindev.chat.service.UserService;
+import com.rindev.chat.storage.FileStorageService;
+import com.rindev.chat.storage.StoredFile;
+import org.springframework.web.multipart.MultipartFile;
+import java.util.Locale;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -25,12 +29,15 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final UserMapper userMapper;
+    private final FileStorageService fileStorageService;
 
     public UserServiceImpl(
             UserRepository userRepository,
-            UserMapper userMapper) {
+            UserMapper userMapper,
+            FileStorageService fileStorageService) {
         this.userRepository = userRepository;
         this.userMapper = userMapper;
+        this.fileStorageService = fileStorageService;
     }
 
     @Override
@@ -149,6 +156,28 @@ public class UserServiceImpl implements UserService {
         User savedUser = userRepository.save(user);
 
         return userMapper.toResponse(savedUser);
+    }
+
+    private static final long MAX_AVATAR_BYTES = 5L * 1024 * 1024;
+
+    @Override
+    @Transactional
+    public UserResponse uploadAvatar(Long userId, MultipartFile file) {
+        User user = findUser(userId);
+        if (file == null || file.isEmpty()) {
+            throw new BadRequestException("Avatar image is required");
+        }
+        if (file.getSize() > MAX_AVATAR_BYTES) {
+            throw new BadRequestException("Avatar image must not exceed 5 MB");
+        }
+        String mime = file.getContentType();
+        if (mime == null || !java.util.Set.of("image/jpeg", "image/png", "image/webp")
+                .contains(mime.toLowerCase(Locale.ROOT))) {
+            throw new BadRequestException("Avatar must be JPEG, PNG or WebP");
+        }
+        StoredFile stored = fileStorageService.store(file);
+        user.setAvatarUrl(stored.fileUrl());
+        return userMapper.toResponse(userRepository.save(user));
     }
 
     private User findUser(Long id) {
