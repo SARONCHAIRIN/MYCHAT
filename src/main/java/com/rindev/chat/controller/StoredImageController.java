@@ -16,28 +16,23 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Secure image download controller.
- *
- * Features:
- * - JWT authentication required
- * - Swagger Bearer authentication
- * - Avatar image support
- * - Conversation membership verification
- * - Secure file retrieval
- * - Missing file handling
- */
 @RestController
 public class StoredImageController {
+
+    private static final Logger log = LoggerFactory.getLogger(StoredImageController.class);
 
     private final LocalFileStorageService storage;
     private final MessageAttachmentRepository attachments;
@@ -49,65 +44,104 @@ public class StoredImageController {
             MessageAttachmentRepository attachments,
             ConversationMemberRepository members,
             UserRepository users) {
+
         this.storage = storage;
         this.attachments = attachments;
         this.members = members;
         this.users = users;
     }
 
-    /**
-     * Download an image.
-     *
-     * Example:
-     * GET /uploads/37118a16-b4f8-4d33-b374-d647d97437a0.jpg
-     */
     @GetMapping("/uploads/{filename:.+}")
     @Operation(summary = "Download stored image", description = "Download an image using JWT authentication. "
             + "Message attachments require conversation membership.", security = @SecurityRequirement(name = "bearerAuth"))
+    @Transactional(readOnly = true)
     public ResponseEntity<FileSystemResource> getImage(
             @AuthenticationPrincipal ChatUserDetails principal,
             @PathVariable String filename) throws IOException {
 
-        // 1. Require authentication
+        log.info("========== IMAGE DOWNLOAD START ==========");
+        log.info("Requested filename: {}", filename);
+
+        // 1. Authentication
         if (principal == null) {
+            log.warn("Image download rejected: unauthenticated");
             throw new ForbiddenException("Authentication required");
         }
 
-        // 2. Construct stored file URL
+        log.info("Authenticated user ID: {}", principal.getId());
+
+        // 2. Construct file URL
         String fileUrl = "/uploads/" + filename;
 
-        // 3. Check whether the image is a user avatar
+        log.info("File URL: {}", fileUrl);
+
+        // 3. Check avatar
         boolean isAvatar = users.existsByAvatarUrl(fileUrl);
 
-        // 4. For message attachments, verify conversation membership
+        log.info("Is avatar: {}", isAvatar);
+
+        // 4. Check attachment and conversation membership
         if (!isAvatar) {
+
+            log.info("Searching attachment...");
 
             MessageAttachment attachment = attachments
                     .findByFileUrl(fileUrl)
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Image attachment not found"));
+                    .orElseThrow(() -> {
+                        log.warn("Attachment not found: {}", fileUrl);
+
+                        return new ResourceNotFoundException(
+                                "Image attachment not found");
+                    });
+
+            log.info("Attachment found, ID: {}", attachment.getId());
+
+            log.info("Resolving message relationship...");
 
             Long conversationId = attachment
                     .getMessage()
                     .getConversation()
                     .getId();
 
+            log.info("Conversation ID: {}", conversationId);
+
             boolean isMember = members
                     .existsByConversationIdAndUserIdAndLeftAtIsNull(
                             conversationId,
                             principal.getId());
 
+            log.info("Conversation membership: {}", isMember);
+
             if (!isMember) {
+                log.warn(
+                        "User {} denied access to conversation {}",
+                        principal.getId(),
+                        conversationId);
+
                 throw new ForbiddenException(
                         "You cannot access this image");
             }
         }
 
-        // 5. Resolve stored file
+        // 5. Resolve physical file
+        log.info("Resolving physical file...");
+
         Path path = storage.findStoredFile(filename);
 
-        // 6. Verify file exists and is readable
-        if (!Files.isRegularFile(path) || !Files.isReadable(path)) {
+        log.info("Resolved path: {}", path);
+
+        // 6. Validate physical file
+        boolean exists = Files.exists(path);
+        boolean regularFile = Files.isRegularFile(path);
+        boolean readable = Files.isReadable(path);
+
+        log.info("File exists: {}", exists);
+        log.info("Regular file: {}", regularFile);
+        log.info("Readable: {}", readable);
+
+        if (!regularFile || !readable) {
+            log.warn("Image file missing or unreadable: {}", path);
+
             throw new ResourceNotFoundException(
                     "Stored image file not found");
         }
@@ -119,12 +153,20 @@ public class StoredImageController {
             mimeType = "application/octet-stream";
         }
 
-        // 8. Return image bytes
+        log.info("MIME type: {}", mimeType);
+
+        // 8. Determine file size
+        long fileSize = Files.size(path);
+
+        log.info("File size: {} bytes", fileSize);
+        log.info("========== IMAGE DOWNLOAD SUCCESS ==========");
+
+        // 9. Return image
         return ResponseEntity.ok()
                 .header("X-Content-Type-Options", "nosniff")
                 .cacheControl(CacheControl.noStore())
                 .contentType(MediaType.parseMediaType(mimeType))
-                .contentLength(Files.size(path))
+                .contentLength(fileSize)
                 .body(new FileSystemResource(path));
     }
 }
