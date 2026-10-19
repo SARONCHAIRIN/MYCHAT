@@ -229,6 +229,19 @@
         </dependency>
 
 
+        <!-- AWS SDK for Cloudflare R2 -->
+
+<dependency>
+
+    <groupId>software.amazon.awssdk</groupId>
+
+    <artifactId>s3</artifactId>
+
+    <version>2.30.38</version>
+
+</dependency>
+
+
     </dependencies>
 
 
