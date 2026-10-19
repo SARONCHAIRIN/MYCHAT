@@ -1,6 +1,5 @@
 package com.rindev.chat.controller;
 
-import com.rindev.chat.dto.request.UpdateAvatarRequest;
 import com.rindev.chat.dto.request.UpdateUserRequest;
 import com.rindev.chat.dto.response.ApiResponse;
 import com.rindev.chat.dto.response.ErrorResponse;
@@ -20,8 +19,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestPart;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.http.MediaType;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -88,19 +85,6 @@ public class UserController {
         return ResponseEntity.ok(
                 ApiResponse.ok(
                         userService.updateMe(
-                                principal.getId(),
-                                request)));
-    }
-
-    @PatchMapping("/me/avatar")
-    @Operation(summary = "Update your avatar")
-    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Request successful")
-    public ResponseEntity<ApiResponse<UserResponse>> updateAvatar(
-            @AuthenticationPrincipal ChatUserDetails principal,
-            @Valid @RequestBody UpdateAvatarRequest request) {
-        return ResponseEntity.ok(
-                ApiResponse.ok(
-                        userService.updateAvatar(
                                 principal.getId(),
                                 request)));
     }
