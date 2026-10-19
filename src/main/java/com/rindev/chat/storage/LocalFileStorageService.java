@@ -62,4 +62,16 @@ public class LocalFileStorageService implements FileStorageService {
                 file.getContentType(),
                 file.getSize());
     }
+    /** Resolve only a flat generated filename within the configured upload root. */
+    public Path findStoredFile(String filename) {
+        if (filename == null || !filename.matches("[a-fA-F0-9-]{36}\\.[A-Za-z0-9]{1,12}")) {
+            throw new com.rindev.chat.exception.ResourceNotFoundException("Image not found");
+        }
+        Path path = root.resolve(filename).normalize();
+        if (!path.getParent().equals(root) || !Files.isRegularFile(path)) {
+            throw new com.rindev.chat.exception.ResourceNotFoundException("Image not found");
+        }
+        return path;
+    }
+
 }
