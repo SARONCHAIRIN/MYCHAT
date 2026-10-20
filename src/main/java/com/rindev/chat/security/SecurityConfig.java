@@ -36,7 +36,7 @@ public class SecurityConfig {
 
         @Bean
         OriginPolicy originPolicy(
-                        @Value("${app.origins.http:http://localhost:3000,http://localhost:49367,http://localhost:5173,https://mychat-flutter.vercel.app}") String http,
+                        @Value("${app.origins.http:http://localhost:3000,http://localhost:49367,http://localhost:5173,https://mychat-flutter.vercel.app,https://mychat-lbzzr9u8h-saronchairin-1751s-projects.vercel.app}") String http,
 
                         @Value("${app.origins.websocket:*}") String websocket,
 
