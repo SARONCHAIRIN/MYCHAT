@@ -36,8 +36,10 @@ public class SecurityConfig {
 
         @Bean
         OriginPolicy originPolicy(
-                        @Value("${app.origins.http:http://localhost:3000,http://localhost:49367,https://mychat-flutter.vercel.app}") String http,
+                        @Value("${app.origins.http:http://localhost:3000,http://localhost:49367,http://localhost:5173,https://mychat-flutter.vercel.app}") String http,
+
                         @Value("${app.origins.websocket:*}") String websocket,
+
                         Environment environment) {
                 return new OriginPolicy(
                                 http,
@@ -78,15 +80,38 @@ public class SecurityConfig {
 
                 @Bean
                 CorsConfigurationSource corsConfigurationSource(OriginPolicy origins) {
+
                         var configuration = new CorsConfiguration();
+
                         configuration.setAllowedOrigins(origins.http());
+
                         configuration.setAllowedMethods(
-                                        List.of("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-                        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
+                                        List.of(
+                                                        "GET",
+                                                        "HEAD",
+                                                        "POST",
+                                                        "PUT",
+                                                        "PATCH",
+                                                        "DELETE",
+                                                        "OPTIONS"));
+
+                        configuration.setAllowedHeaders(
+                                        List.of(
+                                                        "Authorization",
+                                                        "Content-Type",
+                                                        "Accept"));
+
                         configuration.setAllowCredentials(false);
                         configuration.setMaxAge(3600L);
+
                         var source = new UrlBasedCorsConfigurationSource();
+
+                        // Existing API endpoints
                         source.registerCorsConfiguration("/api/**", configuration);
+
+                        // Profile images and uploaded files
+                        source.registerCorsConfiguration("/uploads/**", configuration);
+
                         return source;
                 }
 
@@ -142,6 +167,9 @@ public class SecurityConfig {
                                                         .access((authentication, context) -> new AuthorizationDecision(
                                                                         apiDocsEnabled && swaggerUiEnabled))
                                                         .requestMatchers("/ws", "/ws/**").permitAll()
+
+                                                        .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
+                                                        .requestMatchers(HttpMethod.HEAD, "/uploads/**").permitAll()
 
                                                         // Authentication endpoints
                                                         .requestMatchers(
