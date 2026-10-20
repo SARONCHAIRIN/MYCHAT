@@ -36,9 +36,13 @@ public class SecurityConfig {
 
         @Bean
         OriginPolicy originPolicy(
-                        @Value("${app.origins.http:http://localhost:3000,http://localhost:5173}") String http,
-                        @Value("${app.origins.websocket:*}") String websocket, Environment environment) {
-                return new OriginPolicy(http, websocket, environment.acceptsProfiles(Profiles.of("prod")));
+                        @Value("${app.origins.http:http://localhost:3000,http://localhost:49367,https://YOUR-PROJECT.vercel.app}") String http,
+                        @Value("${app.origins.websocket:*}") String websocket,
+                        Environment environment) {
+                return new OriginPolicy(
+                                http,
+                                websocket,
+                                environment.acceptsProfiles(Profiles.of("prod")));
         }
 
         @Bean
