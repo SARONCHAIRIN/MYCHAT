@@ -48,6 +48,7 @@ public class SecurityConfig {
         }
 
         @Bean
+
         JwtService jwtService(JwtProperties properties) {
                 return new JwtService(properties);
         }
