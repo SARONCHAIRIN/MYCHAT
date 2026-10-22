@@ -10,6 +10,8 @@ public interface MessageAttachmentRepository
 
         Optional<MessageAttachment> findByFileUrl(String fileUrl);
 
+        long countByFileUrl(String fileUrl);
+
     List<MessageAttachment> findByMessageId(
                         Long messageId);
 

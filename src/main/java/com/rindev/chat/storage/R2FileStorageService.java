@@ -17,8 +17,10 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 
 @Service
 @ConditionalOnProperty(name = "app.storage.provider", havingValue = "r2")
@@ -77,6 +79,46 @@ public class R2FileStorageService implements FileStorageService, AutoCloseable {
         } catch (NoSuchKeyException e) {
             throw new ResourceNotFoundException("Stored file not found");
         }
+    }
+
+    @Override
+    public long getFileSize(String filename) {
+        StoredFileNames.validate(filename);
+        try {
+            var head = client.headObject(HeadObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(filename)
+                    .build());
+            return head.contentLength();
+        } catch (NoSuchKeyException e) {
+            throw new ResourceNotFoundException("Stored file not found");
+        }
+    }
+
+    @Override
+    public StoredObject readRange(String filename, long offset, long length) {
+        StoredFileNames.validate(filename);
+        try {
+            long end = offset + length - 1;
+            String rangeHeader = "bytes=" + offset + "-" + end;
+            ResponseBytes<GetObjectResponse> object = client.getObjectAsBytes(
+                    GetObjectRequest.builder()
+                            .bucket(bucket)
+                            .key(filename)
+                            .range(rangeHeader)
+                            .build());
+            return new StoredObject(object.asByteArray(), object.response().contentType());
+        } catch (NoSuchKeyException e) {
+            throw new ResourceNotFoundException("Stored file not found");
+        }
+    }
+
+    @Override
+    public void delete(String filename) {
+        StoredFileNames.validate(filename);
+        // S3-compatible DeleteObject is idempotent: deleting an absent key is
+        // a successful cleanup operation.
+        client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(filename).build());
     }
 
     @Override

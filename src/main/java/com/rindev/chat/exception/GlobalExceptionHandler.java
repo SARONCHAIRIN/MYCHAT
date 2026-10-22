@@ -57,6 +57,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return error(HttpStatus.FORBIDDEN, "Access denied");
     }
 
+    @ExceptionHandler(RangeNotSatisfiableException.class)
+    public ResponseEntity<Void> rangeNotSatisfiable(RangeNotSatisfiableException exception) {
+        return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                .header(HttpHeaders.CONTENT_RANGE, "bytes */" + exception.getTotalLength())
+                .build();
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> integrityFailure(DataIntegrityViolationException exception) {
         return error(HttpStatus.CONFLICT, "Request conflicts with existing data");
@@ -104,6 +111,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return handleExceptionInternal(exception,
                 ErrorResponse.of("VALIDATION_ERROR", "Request validation failed", errors),
                 headers, status, request);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
+            org.springframework.web.multipart.MaxUploadSizeExceededException exception,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        return handleExceptionInternal(exception,
+                ErrorResponse.of("BAD_REQUEST", "File size exceeds the allowed limit"),
+                headers, HttpStatus.BAD_REQUEST, request);
     }
 
     @Override

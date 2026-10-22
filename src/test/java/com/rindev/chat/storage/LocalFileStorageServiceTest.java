@@ -1,6 +1,7 @@
 package com.rindev.chat.storage;
 
 import com.rindev.chat.exception.BadRequestException;
+import com.rindev.chat.exception.ResourceNotFoundException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -73,5 +74,22 @@ class LocalFileStorageServiceTest {
     void blankDirectoryIsRejectedInsteadOfWritingToWorkingDirectory() {
         assertThatThrownBy(() -> new LocalFileStorageService(" "))
                 .isInstanceOf(IllegalArgumentException.class).hasMessage("Upload directory must not be blank");
+    }
+
+    @Test
+    void deleteRemovesOnlyStoredFilesAndIsIdempotent() throws Exception {
+        var storage = new LocalFileStorageService(temporaryDirectory.toString());
+        StoredFile stored = storage.store(new MockMultipartFile(
+                "file", "voice.m4a", "audio/mp4", new byte[] { 1, 2, 3 }));
+        Path storedPath = temporaryDirectory.resolve(stored.storedFileName());
+
+        storage.delete(stored.storedFileName());
+
+        assertThat(storedPath).doesNotExist();
+        storage.delete(stored.storedFileName());
+
+        assertThatThrownBy(() -> storage.delete("../outside.m4a"))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Stored file not found");
     }
 }

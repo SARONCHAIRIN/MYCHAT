@@ -7,6 +7,8 @@ import com.rindev.chat.enums.*;
 import com.rindev.chat.exception.GlobalExceptionHandler;
 import com.rindev.chat.exception.UnauthorizedException;
 import com.rindev.chat.repository.UserRepository;
+import com.rindev.chat.controller.VoiceMessageController;
+import com.rindev.chat.dto.response.AudioStreamResponse;
 import com.rindev.chat.security.CustomUserDetailsService;
 import com.rindev.chat.security.JwtService;
 import com.rindev.chat.security.SecurityConfig;
@@ -77,7 +79,7 @@ class FlutterApiContractTest {
             ConversationService.class, ConversationMemberService.class, DeviceService.class,
             MessageService.class, NotificationService.class, PinnedMessageService.class,
             ReactionService.class, ReceiptService.class, ReportService.class, SettingsService.class,
-            UploadService.class, UserService.class);
+            UploadService.class, UserService.class, VoiceMessageService.class);
     @Autowired WebApplicationContext context;
     @Autowired UserRepository users;
     @Autowired JwtService jwt;
@@ -143,6 +145,10 @@ class FlutterApiContractTest {
         if (operation.status() == 204) {
             assertThat(result.getContentAsString()).isEmpty();
             assertThat(responseSchema.has("content")).isFalse();
+            return;
+        }
+        if (operation.path().endsWith("/audio")) {
+            assertThat(result.getContentType()).contains("audio");
             return;
         }
         assertThat(result.getContentType()).startsWith("application/json");
@@ -236,7 +242,7 @@ class FlutterApiContractTest {
                 new Operation("GET", "/api/v1/users/me", 200, null),
                 new Operation("GET", "/api/v1/users/{id}", 200, null),
                 new Operation("PATCH", "/api/v1/users/me", 200, "{\"bio\":\"Hello\"}"),
-                new Operation("PATCH", "/api/v1/users/me/avatar", 200, "{\"avatarUrl\":\"https://example.test/avatar.png\"}"),
+                new Operation("PATCH", "/api/v1/users/me/avatar", 200, null),
                 new Operation("GET", "/api/v1/settings", 200, null),
                 new Operation("PATCH", "/api/v1/settings", 200, "{\"theme\":\"DARK\"}"),
                 new Operation("POST", "/api/v1/devices", 201, "{\"deviceName\":\"Test phone\",\"platform\":\"ANDROID\",\"fcmToken\":\"example-fcm-token\"}"),
@@ -263,6 +269,8 @@ class FlutterApiContractTest {
                 new Operation("DELETE", "/api/v1/conversations/{conversationId}/pins/{messageId}", 204, null),
                 new Operation("GET", "/api/v1/conversations/{conversationId}/pins", 200, null),
                 new Operation("POST", "/api/v1/uploads", 201, null),
+                new Operation("POST", "/api/v1/voice-messages", 201, null),
+                new Operation("GET", "/api/v1/voice-messages/{messageId}/audio", 200, null),
                 new Operation("POST", "/api/v1/users/{id}/block", 201, null),
                 new Operation("DELETE", "/api/v1/users/{id}/block", 204, null),
                 new Operation("GET", "/api/v1/users/me/blocked", 200, null),
@@ -283,6 +291,14 @@ class FlutterApiContractTest {
             if (path.equals("/api/v1/uploads")) {
                 return multipart(url).file(new MockMultipartFile("file", "sample.png", "image/png", new byte[] { 1, 2, 3 }))
                         .param("messageId", "100");
+            }
+            if (path.equals("/api/v1/users/me/avatar")) {
+                return multipart(url).file(new MockMultipartFile("file", "avatar.png", "image/png", new byte[] { 1, 2, 3 }))
+                        .with(req -> { req.setMethod("PATCH"); return req; });
+            }
+            if (path.equals("/api/v1/voice-messages")) {
+                return multipart(url).file(new MockMultipartFile("audio", "sample.m4a", "audio/m4a", new byte[] { 1, 2, 3 }))
+                        .param("conversationId", "10");
             }
             MockHttpServletRequestBuilder builder = MockMvcRequestBuilders.request(HttpMethod.valueOf(method), url);
             if (path.endsWith("/search")) builder.param("q", "alice");
@@ -333,6 +349,7 @@ class FlutterApiContractTest {
         if (type == ReportResponse.class) return new ReportResponse(80L, 1L, null, null, 100L, ReportReason.SPAM, "Repeated spam", ReportStatus.PENDING, time);
         if (type == UploadResponse.class) return new UploadResponse(90L, 100L, AttachmentType.IMAGE, "sample.png", "/uploads/sample.png", "image/png", 3L);
         if (type == BlockedUserResponse.class) return new BlockedUserResponse(91L, 2L, "bob", time);
+        if (type == AudioStreamResponse.class) return new AudioStreamResponse(new byte[] { 1, 2, 3 }, "audio/mp4", 3L, 0L, 2L, false);
         if (type == Page.class) return new PageImpl<>(List.of((UserPublicResponse) fixture(UserPublicResponse.class)), PageRequest.of(0, 20, Sort.by("id")), 1);
         throw new AssertionError("Missing contract fixture: " + type);
     }
@@ -350,7 +367,7 @@ class FlutterApiContractTest {
             ConversationMemberController.class, DeviceController.class, MessageController.class,
             NotificationController.class, PinnedMessageController.class, ReactionController.class,
             ReceiptController.class, ReportController.class, SettingsController.class,
-            UploadController.class, UserController.class })
+            UploadController.class, UserController.class, VoiceMessageController.class })
     static class ContractConfiguration {
         @Bean UserRepository userRepository() { return mock(UserRepository.class); }
         @Bean AuthService authService() { return serviceMock(AuthService.class); }
@@ -367,5 +384,6 @@ class FlutterApiContractTest {
         @Bean SettingsService settingsService() { return serviceMock(SettingsService.class); }
         @Bean UploadService uploadService() { return serviceMock(UploadService.class); }
         @Bean UserService userService() { return serviceMock(UserService.class); }
+        @Bean VoiceMessageService voiceMessageService() { return serviceMock(VoiceMessageService.class); }
     }
 }

@@ -30,6 +30,12 @@ spring:
     init:
       mode: never
 
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: ${MAX_FILE_SIZE:15MB}
+      max-request-size: ${MAX_REQUEST_SIZE:20MB}
+
 # Useful locally; the prod profile disables both unless explicitly enabled.
 springdoc:
   api-docs:

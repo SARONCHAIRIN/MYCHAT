@@ -51,8 +51,11 @@ public class MessageMapper {
         return new UploadResponse(
                 attachment.getId(), attachment.getMessage().getId(),
                 attachment.getType(), attachment.getFileName(),
-                attachment.getFileUrl(), attachment.getMimeType(),
-                attachment.getFileSize());
+                attachment.getType() == com.rindev.chat.enums.AttachmentType.AUDIO
+                        ? "/api/v1/voice-messages/" + attachment.getMessage().getId() + "/audio"
+                        : attachment.getFileUrl(),
+                attachment.getMimeType(), attachment.getFileSize(),
+                attachment.getDurationSeconds());
     }
 
     private MessageResponse toResponse(Message message, List<UploadResponse> attachments) {

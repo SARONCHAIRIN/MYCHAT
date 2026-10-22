@@ -67,4 +67,63 @@ public class LocalFileStorageService implements FileStorageService {
             throw new IllegalStateException("Could not read stored file", e);
         }
     }
+
+    @Override
+    public long getFileSize(String filename) {
+        StoredFileNames.validate(filename);
+        Path path = root.resolve(filename).normalize();
+        if (!path.getParent().equals(root) || !Files.isRegularFile(path) || !Files.isReadable(path)) {
+            throw new ResourceNotFoundException("Stored file not found");
+        }
+        try {
+            return Files.size(path);
+        } catch (IOException e) {
+            throw new IllegalStateException("Could not read stored file size", e);
+        }
+    }
+
+    @Override
+    public StoredObject readRange(String filename, long offset, long length) {
+        StoredFileNames.validate(filename);
+        Path path = root.resolve(filename).normalize();
+        if (!path.getParent().equals(root) || !Files.isRegularFile(path) || !Files.isReadable(path)) {
+            throw new ResourceNotFoundException("Stored file not found");
+        }
+        try {
+            long totalSize = Files.size(path);
+            if (offset < 0 || length < 0 || offset + length > totalSize) {
+                throw new IllegalArgumentException("Invalid range: offset " + offset + ", length " + length + ", total " + totalSize);
+            }
+            String type = Files.probeContentType(path);
+            byte[] buffer = new byte[(int) length];
+            try (var channel = java.nio.channels.FileChannel.open(path, java.nio.file.StandardOpenOption.READ)) {
+                channel.position(offset);
+                java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(buffer);
+                while (bb.hasRemaining()) {
+                    if (channel.read(bb) == -1) {
+                        break;
+                    }
+                }
+            }
+            return new StoredObject(buffer, type);
+        } catch (IOException e) {
+            throw new IllegalStateException("Could not read stored file range", e);
+        }
+    }
+
+    @Override
+    public void delete(String filename) {
+        StoredFileNames.validate(filename);
+        Path path = root.resolve(filename).normalize();
+        if (!path.getParent().equals(root)) {
+            throw new ResourceNotFoundException("Stored file not found");
+        }
+        try {
+            // deleteIfExists deliberately makes cleanup after a failed or
+            // repeated operation safe without accepting arbitrary paths.
+            Files.deleteIfExists(path);
+        } catch (IOException e) {
+            throw new IllegalStateException("Could not delete stored file", e);
+        }
+    }
 }

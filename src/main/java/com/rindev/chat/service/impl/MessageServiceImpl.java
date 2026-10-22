@@ -29,9 +29,18 @@ import org.springframework.transaction.annotation.Transactional;
 import com.rindev.chat.websocket.ConversationEventPublisher;
 import com.rindev.chat.websocket.WebSocketEventType;
 
+import com.rindev.chat.entity.MessageAttachment;
+import com.rindev.chat.enums.AttachmentType;
+import com.rindev.chat.repository.MessageAttachmentRepository;
+import com.rindev.chat.storage.FileStorageService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
 @Transactional(readOnly = true)
 public class MessageServiceImpl implements MessageService {
+
+        private static final Logger log = LoggerFactory.getLogger(MessageServiceImpl.class);
 
         private static final int DEFAULT_LIMIT = 30;
         private static final int MAX_LIMIT = 100;
@@ -44,6 +53,8 @@ public class MessageServiceImpl implements MessageService {
         private final BlockedUserRepository blockedUserRepository;
         private final MessageMapper messageMapper;
         private final MessageNotificationPublisher notificationPublisher;
+        private final MessageAttachmentRepository attachmentRepository;
+        private final FileStorageService storageService;
 
         public MessageServiceImpl(
                         MessageRepository messageRepository,
@@ -53,7 +64,9 @@ public class MessageServiceImpl implements MessageService {
                         ConversationEventPublisher eventPublisher,
                         BlockedUserRepository blockedUserRepository,
                         MessageMapper messageMapper,
-                        MessageNotificationPublisher notificationPublisher) {
+                        MessageNotificationPublisher notificationPublisher,
+                        MessageAttachmentRepository attachmentRepository,
+                        FileStorageService storageService) {
                 this.messageRepository = messageRepository;
                 this.conversationRepository = conversationRepository;
                 this.memberRepository = memberRepository;
@@ -62,6 +75,8 @@ public class MessageServiceImpl implements MessageService {
                 this.blockedUserRepository = blockedUserRepository;
                 this.messageMapper = messageMapper;
                 this.notificationPublisher = notificationPublisher;
+                this.attachmentRepository = attachmentRepository;
+                this.storageService = storageService;
         }
 
         @Override
@@ -286,6 +301,11 @@ public class MessageServiceImpl implements MessageService {
                 // 1. Save soft delete
                 Message saved = messageRepository.save(message);
 
+                // Clean up audio storage safely if it is a voice message
+                if (saved.getType() == MessageType.AUDIO) {
+                        cleanupAudioStorage(messageId);
+                }
+
                 // 2. Build deleted representation
                 MessageResponse response = messageMapper.toResponse(saved);
 
@@ -295,6 +315,28 @@ public class MessageServiceImpl implements MessageService {
                                 WebSocketEventType.MESSAGE_DELETED,
                                 conversationId,
                                 response);
+        }
+
+        private void cleanupAudioStorage(Long messageId) {
+                try {
+                        List<MessageAttachment> attachments = attachmentRepository.findByMessageId(messageId);
+                        for (MessageAttachment attachment : attachments) {
+                                if (attachment.getType() == AttachmentType.AUDIO) {
+                                        String fileUrl = attachment.getFileUrl();
+                                        if (fileUrl != null && !fileUrl.isBlank()) {
+                                                long count = attachmentRepository.countByFileUrl(fileUrl);
+                                                if (count <= 1) {
+                                                        String filename = fileUrl.startsWith("/uploads/")
+                                                                        ? fileUrl.substring("/uploads/".length())
+                                                                        : fileUrl;
+                                                        storageService.delete(filename);
+                                                }
+                                        }
+                                }
+                        }
+                } catch (Exception e) {
+                        log.warn("Failed to clean up stored audio for message {}: {}", messageId, e.getMessage());
+                }
         }
 
         private int validateLimit(Integer requestedLimit) {
