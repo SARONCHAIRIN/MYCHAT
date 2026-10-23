@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.regex.Pattern;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AccountStatusUserDetailsChecker;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -32,6 +33,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         this.jwtService = jwtService;
         this.userDetailsService = userDetailsService;
         this.errorHandler = errorHandler;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        // A client may attach its expired access token to every Dio request.
+        // The refresh endpoint authenticates the refresh token in its request body,
+        // so an unrelated stale Bearer token must not block token renewal.
+        return HttpMethod.POST.matches(request.getMethod())
+                && "/api/v1/auth/refresh".equals(request.getServletPath());
     }
 
     @Override

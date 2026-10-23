@@ -123,6 +123,15 @@ operators must supply real credentials, rotate the previously checked-in databas
 credential, and use a private MySQL network. The existing local MySQL container's
 public port binding was observed and documented, not changed by this task.
 
+## Hotfix — Refresh Endpoint With Stale Access Token
+
+**Status: implemented; automated verification pending in this environment.**
+
+- Updated `JwtAuthenticationFilter` to skip access-token authentication only for `POST /api/v1/auth/refresh`. The refresh endpoint validates the refresh token from its request body, so an expired access token automatically attached by a client must not prevent renewal.
+- Kept malformed/invalid Bearer tokens rejected on login and other routes; protected routes and logout remain unchanged.
+- Updated `SecurityIntegrationTest` to cover the stale/invalid Authorization header on refresh while confirming login still rejects an invalid Bearer token.
+- Verification attempt: `bash mvnw test -q` could not download Maven 3.9.16 because Maven Central was unreachable from this environment. Tests have not been claimed as passing; rerun `./mvnw test` in a network-enabled environment.
+
 ## Current Phase
 
 **Phase 26 — Flutter API Handoff**

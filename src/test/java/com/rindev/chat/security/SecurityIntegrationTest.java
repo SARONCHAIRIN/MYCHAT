@@ -251,9 +251,16 @@ class SecurityIntegrationTest {
     }
 
     @Test
-    void invalidBearerIsRejectedEvenOnPublicAuthenticationRoute() throws Exception {
+    void invalidBearerIsRejectedOnLoginButIgnoredOnRefresh() throws Exception {
         assertUnauthorized(post("/api/v1/auth/login")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer invalid"));
+
+        mvc.perform(post("/api/v1/auth/refresh")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer expired-or-invalid")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
         verifyNoInteractions(userRepository);
     }
 
